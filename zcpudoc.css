@@ -1,0 +1,80 @@
+	
+	/*
+	 * FILIPE MADE THIS OKAY
+	 * OKAY.
+	 */
+
+	html, body, div, form, fieldset, legend, label{margin: 0;padding: 0; }
+	table{border-collapse: collapse;border-spacing: 0;}
+	th, td{text-align: left;vertical-align: top;}
+	h1, h2, h3, h4, h5, h6, th, td, caption { font-weight:normal; }
+	img { border: 0; }
+
+	body {
+		font-size:12px;
+		font-family:Arial, Tahoma, sans-serif;
+
+		margin:20px auto;
+		width:80%;
+		background:#E6E8E8;
+	}
+
+	a:hover {
+		color:black;
+	}
+
+	.title {
+		font-family:Georgia, serif;
+		font-size:48px;
+		word-wrap:break-all;
+		letter-spacing:5px;
+	}
+
+		.title h3 {
+			font-size:32px;
+		}
+	
+	.subsection p {
+		margin:5px 0;
+		border-bottom:1px dashed #D9D9D9;
+	}
+
+		.subsection p b {
+			color:#002138;
+			font-weight:600;
+			text-shadow:1px 1px 0 white;
+		}
+
+	pre {
+		font-size:12px;	
+		padding:3px;
+		vertical-align:middle;
+
+		background:white;
+		border:1px solid #9C9C9C;
+
+		-moz-border-radius:3px;
+		-webkit-border-radius:3px;
+		border-radius:3px;
+
+		padding:8px;
+
+		font-family:'Consolas', 'Droid Mono', monospace;
+	}
+		tt {
+			text-shadow:1px 1px 0 white;
+		}
+
+	blockquote table {
+		margin:0 auto;
+		background:white;
+		border:1px solid #9C9C9C;
+
+		-moz-border-radius:6px;
+		-webkit-border-radius:6px;
+		border-radius:6px;
+	}
+
+		blockquote table td {
+			padding:3px;
+		}
