@@ -1,0 +1,755 @@
+\chapter{Advanced Processor Features} \label{advfeatures}
+
+\section{Advanced Execution Control} \label{advexecution}
+This section describes instruction execution in complete detail. The processor will fetch instructions sequentially, decode them, and then execute.
+
+During execution the \reg{XEIP} register points to the instruction start address in global memory space, while the \reg{IP} register is incremented as the instruction bytes are fetched in sequence.
+
+The execution will also increment \reg{TMR} register by amount of cycles that have been required to complete this instruction. The \reg{CODEBYTES} register is incremented each time next byte is fetched by the instruction decoder (so the \reg{CODEBYTES} register counts the total size of executable code executed so far).
+
+\begin{verbatim}
+//TMR = 170
+
+MOV EAX,10; //1-cycle instructions
+ADD EAX,EBX;
+
+//TMR = 172
+\end{verbatim}
+
+The instruction decoder will set \reg{CPAGE} register to number of the current page (the page that fetched instruction is located on), and \reg{PPAGE} to number of the page previous instruction was located on. \emph{Current page is determined by the location of the first fetched byte of the currently executed instruction}.
+
+When \reg{CPAGE} and \reg{PPAGE} values mismatch the permission check logic is triggered. Peforming a jump of any sort will run a different check logic, and will reset both \reg{CPAGE} and \reg{PPAGE} to page the target jump offset is located on.
+
+The instructions can be either fixed-sized or variable-sized, see page \pageref{localexec}.
+
+This is the psuedocode for the instruction decoding procedure:
+
+\singlespacing
+\begin{verbatim}
+// Calculate absolute execution address and set current page
+XEIP = IP + CS
+SetCurrentPage(floor(XEIP/128))
+
+// Do not allow execution if we are not on kernel
+// page, or not calling from kernel page
+if (PCAP == 1) and (CurrentPage.Execute == 0) and 
+   (PreviousPage.RunLevel <> 0) then
+  Interrupt(14,CPAGE)
+end
+
+// Reset interrupts flags
+INTR = 0
+if NIF <> undefined then
+  IF = NIF
+  NIF = undefined
+end
+
+// Fetch instruction and RM byte
+Opcode = Fetch()
+RM = 0
+isFixedSize = false
+
+// Check if it is a fixed-size instruction
+if ((Opcode >= 2000) and (Opcode < 4000)) or
+   ((Opcode >= 12000) and (Opcode < 14000)) then
+  Opcode = Opcode - 2000
+  isFixedSize = true
+end
+
+// Fetch RM if required
+if (OperandCount > 0) or
+   (Precompile_Peek() == 0) or 
+   (isFixedSize) then
+  RM = Fetch()
+end
+
+// If failed to fetch opcode/RM then report an error
+if INTR == 1 then
+  IF = 1
+  Interrupt(5,12)
+end
+
+// Check opcode runlevel
+if (PCAP == 1) and (CurrentPage.Runlevel > RunLevel[Opcode]) then
+  Interrupt(13,Opcode)
+end
+
+// Decode RM byte
+dRM2 = floor(RM / 10000)
+dRM1 = RM - dRM2*10000
+
+// Default segment offsets
+Segment1 = -4
+Segment2 = -4
+
+// Decode segment offsets
+if Opcode > 1000 then
+  if Opcode > 10000 then
+    Segment2 = Fetch()
+
+    Opcode = Opcode-10000
+    if Opcode > 1000 then
+      Segment1 = Fetch()
+      
+      Opcode = Opcode-1000
+      Segment1 <> Segment 2
+    else
+      if isFixedSize then
+        Fetch()
+      end
+    end
+  else
+    Segment1 = Fetch()
+    Opcode = Opcode-1000
+    if isFixedSize then
+      Fetch()
+    end
+  end
+elseif isFixedSize then
+  Fetch()
+  Fetch()
+end
+
+// If failed to fetch segment prefix then report an error
+if INTR == 1 then
+  Interrupt(5,12)
+end
+
+// Check if opcode is invalid
+if opcode is not valid then
+  Interrupt(4,Opcode)
+else
+  // Fetch immediate values if required
+  if isFixedSize then
+    OperandByte1 = Fetch()
+    if INTR == 1 then 
+      Interrupt(5,22)
+    end
+    OperandByte2 = Fetch()
+    if INTR == 1 then 
+      Interrupt(5,32)
+    end
+  else
+    if OperandCount > 0 then
+      if NeedFetchByte1 then
+        OperandByte1 = Fetch()
+        // If failed to read the byte, report an error
+        if INTR == 1 then 
+          Interrupt(5,22)
+        end
+      end
+      if OperandCount > 1 then
+        if NeedFetchByte2 then
+          OperandByte2 = Precompile_Fetch() or 0
+          // If failed to read the byte, report an error
+          if INTR == 1 then
+            Interrupt(5,32)
+          end
+        end
+      end
+    end
+  end
+  
+  // Execute instruction
+  Execute()
+
+  // Write back the values
+  if OperandCount > 0 then
+    WriteBack(1)
+    if OperandCount > 1 then
+      WriteBack(2)
+    end
+  end
+end
+
+// Advance timers and counters
+CODEBYTES = CODEBYTES + Instruction_Size
+TMR = TMR + Instrucion_Cycles
+TIMER = TIMER + TimerDT
+
+// Set this page as previous (if it is executable)
+XEIP = IP + CS
+SetPreviousPage(floor(XEIP/128))  
+\end{verbatim}
+\onehalfspacing
+
+\section{Paging System} \label{paging}
+The Zyelios CPU divides the entire accessable memory space into pages. Every page is 128 bytes in size. Pages are numbered sequentially; This means that addresses 0, 1, ... 127 belong to page 0, addresses 128 .. 255 belong to page 1, 256 .. 383 belong to page 2 and so on.
+
+Every page can have a separate permission mask (read permission, write permission, execute permission) and runlevel.
+
+Runlevel is a number that can be used to divide code into different permission levels, with higher levels reflecting kernel-mode code and lower levels reflecting user-level code. Each runlevel is a number between 0 and 255 inclusive. Higher permission levels are those that are closer to 0. Lower permission levels are those that are closer to 255. Code executing from a page with a higher permission level can read or write pages of a lower runlevel, but the opposite cannot occur.
+
+\begin{verbatim}
+SRL 1,12 //Set page 1 runlevel to 12
+//Page 1 is addresses 128..255
+
+SPP 5,0 //Set page 5 to be readable
+CPP 6,1 //Make page 6 non-writeable
+CPP 7,2 //Prevent code execution on page 7
+\end{verbatim}
+
+Runlevel 0 is a special runlevel which will ignore all permission settings. This runlevel is also capable of running several privileged instructions such as \reg{CPUSET}. All others runlevels follow page permissions.
+
+When a page is marked non-readable, it can only be read from a page with a higher runlevel. When a page is marked non-writeable it can only be written from a page with smaller runlevel. When a page is marked non-executable, then only code from runlevel 0 can branch into this page.
+
+Every page can also be remapped to any other page in memory. This means that every time the processor accessess target page, the data will be read from a different physical address. Any page can be remapped, even if the page already points to valid memory.
+
+\begin{verbatim}
+MOV #130,1234 //Set cell 2 of page 1 to 1234
+SMAP 0,1 //Remap page 0 to page 1
+MOV EAX,#2 //Read cell 2 of page 0 (but really read from page 1)
+//EAX is now set to 1234
+\end{verbatim}
+
+Page mapping and permissions settings are stored in the \emph{page table}. The page table is active when the processor has the extended memory mode enabled (\reg{MF} set to 1). If \reg{MF} is set to 0 the page table will be stored internally; if it is set to 1 the page table will be stored in RAM. The actual permission checks are being made only when \reg{EF} flag is set to 1, and the processor is running in the extended mode.
+
+The \reg{PTBL} internal register is an \emph{absolute} pointer to the table start, and \reg{PTBE} holds the number of entires in the table. It is possible to switch page tables during execution.
+
+Every page table entry is 2 bytes in size. The first entry (entry number 0) is the default page. All other pages in the table correspond to memory pages.
+
+If the address being accessed is not covered by any page listed in the page table, it will use the permissions set on the default page entry. You cannot perform memory mapping on pages which do not have entry in page table.
+
+The first byte of every entry holds the runlevel and permission flags. The second byte holds index of page this page should be remapped to. Note that permission flags in the page table entry are \emph{inverted}; 1 means the permission is restricted and 0 means that it is not.
+
+Example on how to setup a page table:
+\begin{verbatim}
+PageTable:
+  alloc 513*2 //512 page entries + default for 64KB of RAM
+  
+  .....
+  
+//Setup page table
+CPUSET 37,PageTable //PTBL
+CPUSET 38,512 //PTBE
+
+//Enable extended memory mode
+STM
+
+//Indirect table manipulation
+SMAP 0,1 //Map page 0 to 1
+SPP 5,0 //Set page 5 to be readable
+
+//Direct table manipulation
+MOV ESI,PageTable; //Table offset
+MOV ESI:#0,0xE0; //Set default page permissions to not allow anything
+MOV ESI:#2,0; //Disable page 0
+MOV ESI:#5,10; //Remap page 1 to page 10
+\end{verbatim}
+
+The layout of the first byte of each entry is as follows:
+
+\singlespacing
+\begin{longtable}{|c|p{4.0in}|} \hline
+Bit & Description \\ \hline
+\texttt{00} & Is page disabled? Set to 1 to disable this page \\ \hline
+\texttt{01} & Is page remapped? Set to 1 to remap this page \\ \hline
+\texttt{02} & Page must generate external interrupt 30 (page trap) upon access \\ \hline
+\texttt{03} & Page trap overrides read/write (generates external interrupts 28, 29)\\ \hline
+\texttt{04} & Reserved \\ \hline
+\texttt{05} & Read permissions (0: allowed, 1: disabled) \\ \hline
+\texttt{06} & Write permissions (0: allowed, 1: disabled) \\ \hline
+\texttt{07} & Execute permissions (0: allowed, 1: disabled) \\ \hline
+\texttt{08..15} & Runlevel \\ \hline
+\end{longtable}
+\onehalfspacing
+
+Disabled pages will cause a memory fault when a read is attempted to any address in its range (as if page wasn't in the address space). Remapped pages will use the second byte in the entry as the index for the \emph{physical} page this page must be remapped to.
+
+It is possible to trap page accesses by setting bits 2 and/or 3. This will cause any access to this page to generate external interrupt 28 (read), 29 (write), or 30 (access) with the page number being accessed as the parameter.
+
+If bit 2 and is set, the external interrupt 30 will be generated on memory access attempt. If bit 3 is also set then the external interrupts 28 or 29 will be generated instead of the interrupt 30, and it will be possible to override the result of the memory read/write access (see page \pageref{memoverride} for more info).
+
+\label{interrupthandlingpg}
+
+There are special rules when handling interrupts. Permissions to call the interrupts are defined by runlevel of the interrupt table. This means you can restrict the user program from calling certain interrupts, but the user program would be able to call lower runlevel code using other (non-restricted) interrupts. You can imagine it as if you were \reg{CALL}ing your interrupt routine from the interrupt table (and not from user program). This is the way you can protect your kernel code from reading/writing/executing while retaining the ability to run the code (via calling interrupts).
+
+\begin{verbatim}
+STEF //Enable extended mode
+LIDTR 2048 //Interrupt table at pages 16-23
+
+SRL 16,0 //Set runlevel of interrupts 0..31 to 0
+SRL 17,1 //Set runlevel of interrupts 32..63 to 1
+SRL 18,2 //Set runlevel of interrupts 64..95 to 2
+SRL 19,3 //Set runlevel of interrupts 96..127 to 3
+\end{verbatim}
+
+Current page when executing the instructions is determined by the \reg{CPAGE} register. \emph{The actual current page is determined by the location of the first fetched byte of the currently executed instruction}. The paging system performs permissions checks whenever \reg{PPAGE} (page the previously executed instruction was located on) and \reg{CPAGE} register values mismatch (which corresponds to crossing the page boundary).
+
+Peforming a jump of any sort will run permission check logic, and will reset both \reg{CPAGE} and \reg{PPAGE} to page the target jump offset is located on.
+
+It is only possible to cross page boundary or perform a jump if execute flag of the next (target) page is set to 1, or if it is set to 0 and previous page has runlevel 0.
+
+All external access to the ZCPU inside memory will trigger the corresponding read/write permission checks. The runlevel for the external access is equal to the value of the \reg{XTRL} register (external runlevel). By default the external memory access operations have a runlevel of 0.
+
+To sum it up, these are all the permission and logic checks performed by the paging system:
+\begin{itemize}
+	\item Boundary permission check (when execution crosses boundary between two pages)
+	\item Jump permission check (execution jumps to a new offset)
+  \item Interrupt table permission checks	
+	\item Read/write memory access (to any location)
+	\item External read/write memory access (accessing CPU address space from outside)	
+	\item Read/write address remapping logic
+	\item Page access trapping logic
+\end{itemize}
+
+\section{Internal ROM}
+The Zyelios CPU can be configured to have built-in ROM and RAM. This allows you to store some program code right on the processor chip. The contents of ROM will be written into RAM every time the processor is reset. The ROM can be read from and written to in software.
+
+There are three opcodes to work with the internal ROM: \reg{ERPG} (erase ROM page), \reg{WRPG} (write ROM page), \reg{RDPG} (read ROM page).
+
+See example of use:
+\begin{verbatim}
+ERPG 4 //Erase some data from ROM
+WRPG 4 //Write this block of data to ROM
+       //After CPU reset it will be still preserved
+RDPG 4 //Restore this page from ROM
+
+ORG 512 //Put on page 4
+SOME_AREA:
+ ... some data ...
+\end{verbatim}
+
+\section{Bitwise Operations} \label{bitwiseops}
+The ZCPU can work with integer values of variable bit width. It supports 8, 16, 32, and 48 bit integers, and has a complete instruction set to work with them.
+
+There are bitwise logic instructions which work on all bits of the integer number. They are \reg{BAND}, \reg{BOR}, \reg{BXOR}, \reg{BSHL}, \reg{BSHR}, \reg{BNOT}. For example:
+\begin{verbatim}
+MOV  EAX,105 //1101001
+BAND EAX,24  //0011000
+//EAX = 8      0001000
+
+BOR EAX,67   //1000011
+//EAX = 75   //1001011
+
+BXOR EAX,15  //0001111
+//EAX = 68   //1000100
+
+BSHL EAX,2
+//EAX = 272  //100010000
+
+BSHR EAX,4
+//EAX = 17   //0010001
+
+BNOT EAX
+//EAX = -18  //111111111111111111101110
+\end{verbatim}
+
+Also there are additional operations that work on separate bits of the number. They are \reg{BIT}, \reg{SBIT}, \reg{TBIT}, \reg{CBIT}.
+
+The \reg{BIT} operation tests whether specific bit of the number is set. It is possible to check result of this comparsion by using a conditional jump:
+\begin{verbatim}
+MOV EAX,105
+BIT EAX,0
+JNZ LABEL //Jump succeeds (bit is not zero)
+
+BIT EAX,1
+JNZ LABEL //Jump fails (bit is zero)
+\end{verbatim}
+
+The \reg{SBIT} and \reg{CBIT} clear and set the specific bit of the number. \reg{TBIT} instruction will toggle that bit:
+\begin{verbatim}
+MOV EAX,105 //1101001
+SBIT EAX,1
+//EAX = 107   1101011
+
+CBIT EAX,6
+//EAX = 43    0101011
+
+TBIT EAX,0
+//EAX = 42    0101010
+\end{verbatim}
+
+\section{Memory Blocks Support}
+Certain instructions in the ZCPU support using the \reg{BLOCK} instruction before them to specify a memory block the instruction must be executed on. For example it is possible to set permissions of an entire memory block at once:
+\begin{verbatim}
+BLOCK 1024,8192 //A 8KB block at offset 1024
+SRL 0,4 //Set runlevel of all pages in this block to 4
+\end{verbatim}
+
+The first operand of the \reg{BLOCK} instruction is the memory offset the block must start from (must be aligned on page boundary for the paging instructions), and the second operand is the block size (the size must be divisable by 128 if this is a block for the page permission instructions).
+
+The \reg{BLOCK} instruction sets the two internal registers \reg{BlockStart}, \reg{BlockSize}. After the instruction that supports memory blocks has executed, it will reset block size back to zero.
+
+The block size must be non-zero for the instruction to work on that block.
+
+\emph{It is possible that an interrupt will occur between the \reg{BLOCK} instruction and the target instruction}. It is advised against using \reg{BLOCK} instruction inside an interrupt handler!
+
+The following instructions support this psuedo-prefix: \reg{SPP}, \reg{CPP}, \reg{SRL}, \reg{SMAP}.
+
+\section{Copying, Shifting, Swapping Large Blocks of Data}
+There are built-in instructions in the ZCPU for quickly moving and working with large arrays of data in an easy way.
+
+It's possible to copy one area of memory to another using the \reg{MCOPY} instruction:
+\begin{verbatim}
+mov ESI,source_data;
+mov EDI,dest_data;
+mcopy 5; //Copy 5 bytes
+
+string source_data,"Apple";
+string dest_data,"A quick fox";
+\end{verbatim}
+After running this code "dest\textunderscore data" string will be equal to "Appleck fox".
+
+Two blocks of memory can be swapped using the \reg{MXCHG} instruction:
+\begin{verbatim}
+mov ESI,source_data;
+mov EDI,dest_data;
+mxchg 5; //Swap 5 bytes
+
+string source_data,"Apple";
+string dest_data,"A quick fox";
+\end{verbatim}
+After running this code "dest\textunderscore data" string will be equal to "Appleck fox", and "source\textunderscore data" will be equal to "A qui".
+
+And it's also possible to shift all values in block of data:
+\begin{verbatim}
+mov ESI,source_data;
+
+mshift 13,2; //Shift 13 bytes by 2 cells to the right
+//source_data = "quick foxA "
+
+mshift 13,-4; //Shift 13 bytes by 4 cells to the left
+//source_data = "oxA quick f"
+
+string source_data,"A quick fox";
+\end{verbatim}
+
+The offset by which data is shifted must be less or equal to amount of bytes that are being shifted. But it is possible to specify offsets larger than the data size, and that will reverse the direction of shift, and will not wrap the data around.
+
+All of these instructions can work on up to \reg{8192} bytes in a memory block.
+
+\section{Stack Frame Support}
+The ZCPU processor has two extra instructions to provide stack frame support. Stack frame allows to prevent stack corruption by induvidual subroutines, and it also provides an easy way to create local variables on stack, and pass values to the subroutine via stack.
+
+\reg{ENTER X} instruction is same as the following code:
+\begin{verbatim}
+Push(EBP)
+EBP = ESP + 1
+ESP = ESP - X
+\end{verbatim}
+It will set \reg{EBP} register to stack frame base (value of stack pointer at function entrypoint), and add some empty space on stack for the local variables.
+
+\reg{LEAVE} instruction corresponds to the following code:
+\begin{verbatim}
+ESP = EBP - 1
+EBP = Pop()
+\end{verbatim}
+It will restore the stack frame base of the previous function (if it exists), and restore stack.
+
+%RSTACK, SSTACK
+
+\section{Interrupts/Extended Mode} \label{advancedinterrupts}
+Interrupts work in a way similar to processor subroutines, but they can also be triggered if an error occurs while executing an instruction. In this case the instruction execution will not be completed, and the processor will attempt to handle this interrupt.
+
+Interrupt handling is only available in extended mode of the processor. If interrupt occurs with extended mode disabled the processor will halt its execution and report error code to the external output:
+\begin{verbatim}
+lidtr interrupt_table; //Load interrupt table
+stef; //Enable extended mode
+
+int 40; //Handle interrupt 40
+mov #0.123,10; //Handle interrupt 15 (address space violation)
+
+clef; //Disable extended mode
+int 40; //Will halt processor execution
+\end{verbatim}
+
+The processor determines which subroutine it must call by checking the interrupt descriptor table/interrupt table. It's a table located somewhere in the processor memory which holds addresses to all interrupt handlers, and extra flags that alter the way the interrupt is handled.
+
+The pointer to this table must be specified using the \reg{LIDTR} instruction. The interrupt table usually has 256 entries for 256 possible interrupts, but it may have less entries if \reg{NIDT} (interrupt table entry count) register is changed. If processor attempts to handle an interrupt which is not in the table, it will skip it:
+\begin{verbatim}
+cpuset 52,32; //Only have 32 entries
+lidtr interrupt_table; //Load interrupt table
+stef; //Enable extended mode
+
+int 31; //Will be handled
+int 32; //Will be skipped
+\end{verbatim}
+
+Each entry in the interrupt table has the following format:
+
+\singlespacing
+\begin{longtable}{|c|p{4.0in}|} \hline
+Byte & Description \\ \hline
+\texttt{0} & Interrupt handler IP \\ \hline
+\texttt{1} & Interrupt handler CS (if required, see flags) \\ \hline
+\texttt{2} & Reserved (must be 0) \\ \hline
+\texttt{3} & Flags \\ \hline
+\end{longtable}
+\onehalfspacing
+
+There are the following flags that can be set:
+
+\singlespacing
+\begin{longtable}{|c|p{4.0in}|} \hline
+Bit & Description \\ \hline
+3 & CMPR register will be set to 1 if an interrupt has occured \\ \hline
+4 & 1 if interrupt should \emph{not} set CS \\ \hline
+5 & Interrupt enabled (active) \\ \hline
+6 & This interrupt is an external interrupt \\ \hline
+ \texttt{0} & Interrupt handler IP
+\end{longtable}
+\onehalfspacing
+
+If bit 3 is set, the interrupt will set CMPR register to 1. This can be used for making simple exception handlers:
+
+If bit 4 is set, the interrupt will not set the code segment (it sets it by default). The interrupt will only be called if bit 5 is set, if it's clear then it will be ignored (unless it's the interrupt 0 or 1, if so, then they will act as if called without extended mode enabled).
+
+This interrupt can only be called as an external interrupt if bit 6 is set. Otherwise it will generate interrupt 13 (general processor fault) instead.
+
+There are special rules for using the interrupt table if paging is used. See page \pageref{interrupthandlingpg} for more information on how permissions will work if that's the case.
+
+The interrupt handler is fairly complex. The psuedocode for the interrupt handler is listed below:
+\singlespacing
+\begin{verbatim}
+// Interrupt is active, lock the bus to prevent any further read/write
+INTR = 1
+BusLock = 1
+  
+// Set registers
+LINT = interruptNo
+LADD = interruptParameter or XEIP
+
+// Output the error externally
+SignalError(interruptNo,LADD)
+  
+if IF == 1 then
+  if EF == 1 then // Extended mode
+    // Boundary check
+    if (interruptNo < 0) or (interruptNo > 255) then
+      if not cascadeInterrupt then Interrupt(13,3) end
+    end
+
+    // Check against boundaries of the interrupt table
+    if interruptNo > NIDT-1 then
+      if interruptNo == 0 then Reset = 1 end
+      if interruptNo == 1 then Clk = 0 end
+    end
+
+    // Calculate absolute offset in the interrupt table
+    interruptOffset = IDTR + interruptNo*4
+
+    // Disable bus lock, set the current page for read operations
+    BusLock = 0
+    SetCurrentPage(interruptOffset)
+
+    IF = 0
+    INTR = 0
+    IP    = ReadCell(interruptOffset+0)
+    CS    = ReadCell(interruptOffset+1)
+            ReadCell(interruptOffset+2)
+    FLAGS = ReadCell(interruptOffset+3)
+    IF = 1
+    
+    if INTR == 1 then
+      if not cascadeInterrupt then Interrupt(13,2) end
+    else
+      INTR = 1
+    end
+    
+    // Set previous page to trigger same logic as if
+    //  CALL-ing from a privilegied page
+    SetCurrentPage(XEIP)
+    SetPrevPage(interruptOffset)
+    BusLock = 1
+
+    if isExternal and (FLAGS[6] <> 1) then
+      if not cascadeInterrupt then Interrupt(13,4) end
+    end
+    
+    if FLAGS[5] == 1 then
+      // Push return data
+      BusLock = 0
+      IF = 0
+      INTR = 0
+      Push(IP)
+      Push(CS)
+      IF = 1
+      
+      if INTR == 1 then
+        if not cascadeInterrupt then Interrupt(13,6) end
+      else
+        INTR = 1
+      end
+      BusLock = 1
+
+      // Perform a short or a long jump
+      IF = 0
+      INTR = 0
+      if FLAGS[4] == 0
+      then Jump(IP,CS)
+      else Jump(IP)
+      end
+      IF = 1
+      
+      if INTR == 1 then
+        if not cascadeInterrupt then Interrupt(13,7) end
+      else
+        INTR = 1
+      end
+      
+      // Set CMPR
+      if FLAGS[3] == 1 then
+        CMPR = 1
+      end
+    else
+      if interruptNo == 0 then
+        Reset()
+      end
+      if interruptNo == 1 then
+        Clk = 0
+      end
+      if FLAGS[3] == 1 then
+        CMPR = 1
+      end
+    end
+  end
+
+  if (EF == 0) then // Normal mode
+    if (interruptNo < 0) or 
+       (interruptNo > 255) or 
+       (interruptNo > NIDT-1) then
+      // Interrupt not handled
+      Exit()
+    end
+    if interruptNo == 0 then Reset = 1 end
+    if interruptNo ~= 31 then Clk = 0 end
+  end
+end
+  
+// Unlock the bus
+BusLock = 0
+\end{verbatim}
+\onehalfspacing
+
+\section{External Interrupts}
+(no chapter)
+%(NMI stuff)
+
+\section{Memory Access Overriding} \label{memoverride}
+(no chapter)
+%(using page traps to override access to specific memory areas)
+
+\section{Internal Timer}
+The ZCPU has an internal timer which can be used for precise time measurements during the code execution. The timer can also be used for triggering interrupts at precise time intervals.
+
+The \reg{TIMER} instruction can be used to fetch the internal timer value in seconds:
+\begin{verbatim}
+TIMER EAX
+//EAX is now equal to amount of seconds since CPU startup
+\end{verbatim}
+
+It is possible to configure the timer to trigger external interrupt after certain amount of seconds, or a certain amount of cycles has passed by configuring one of the special registers.
+
+\reg{TimerMode} register controls the timer mode. If it's set to 0 the timer will be disabled. If \reg{TimerMode} is set to 1 the timer will use \reg{TMR} register as counter source, and if \reg{TimerMode} is set to 2 the timer will use the \reg{TIMER} register as the source.
+
+\reg{TimerRate} sets the number of cycles, or the number of seconds that must pass before the timer will trigger. \reg{TimerPrevTime} register stores value of the \reg{TMR} or the \reg{TIMER} register when timer fired the last time.
+
+\reg{TimerAddress} is the number of the interrupt that will be called when the timer fires. The interrupt call will be an external interrupt call.
+
+Changing value of the \reg{TimerMode} register will reset the \reg{TimerPrevTime} register.
+
+This is an example of how to setup timer:
+\begin{verbatim}
+CPUSET 65,90; //Trigger once per 90 cycles
+CPUSET 67,40; //Trigger external interrupt #40
+
+CPUSET 64,1;  //Enable timer to count cycles
+\end{verbatim}
+
+It could also be initialized for an interval in seconds:
+\begin{verbatim}
+CPUSET 65,1.5; //Trigger once per 1.5 seconds
+CPUSET 67,40;  //Trigger external interrupt #40
+
+CPUSET 64,2;   //Enable timer to count seconds
+\end{verbatim}
+
+If precision in intervals between timer firing is required, the timer can be reset in the interrupt caller (if required):
+\begin{verbatim}
+ExternalInterrupt:
+  CLI; //Disable interrupts
+  
+  .....
+  
+  CPUGET EAX,29; //Read cycles counter
+  ADD EAX,4;     //Account for 4 'missing' cycles
+  CPUSET 66,EAX; //Write last timer fire time
+  
+  STI; //Enable interrupts
+EXTRET;
+\end{verbatim}
+
+Or alternatively it's possible to reset it by swapping the timer mode:
+\begin{verbatim}
+ExternalInterrupt:
+  CLI; //Disable interrupts
+  
+  .....
+  
+  CPUSET 64,1; //Restart timer   
+  STI; //Enable interrupts
+EXTRET;
+\end{verbatim}
+
+\section{Vector Extension}
+(using VMODE,VADD,etc)
+
+\section{Hardware Debug Mode}
+(Using hardware debug mode)
+
+\section{Caching and Runtime Optimization} \label{caching}
+The Zyelios CPU will cache executed microcode for faster execution. This increases code execution speed, but some penalties apply. The processor will decode instructions the first time they are encountered, and all subsequent executions will use the cached execution information.
+
+The Zyelios CPU will cache executed microcode for faster execution. The processor will decode instructions the first time they are encountered, and all subsequent executions will use the cached execution information. The cache will provide very little benefit for code that is executed infrequently, but code that is executed frequently will run much faster.
+
+The penalties caused by caching system mostly concern the flow of execution and the internal optimizations the processor makes:
+\begin{enumerate}
+	\item While executing a single cached block of microcode the processor uses fast-access cached registers. This means that register values are not changed until the block finishes executing.
+	\item The processor only caches instructions the first time they are decoded. It will invalidate cache if the processor itself writes or reads to the memory, but it does not invalidate cache if any other device writes to an external source.
+	\item Cached microcode blocks contain up to 8 instructions each. They will end prematurely on unconditional branches and jumps.
+	\item All reading and writing operations might be delayed by several instructions until they actually happen. There are only very specific ways to make sure your I/O operation really happens.
+\end{enumerate}
+
+%\section{Instructions}
+%These new instructions are present in the Zyelios CPU 10:
+%\begin{itemize}
+  %\item \reg{EXTINT} (\char`\#70, extended interrupt call, renamed \reg{NMIINT})
+  %\item \reg{EXTRET} (\char`\#110, extended interrupt restore, renamed \reg{NMIRET})
+  %\item \reg{STD2} (\char`\#116, enter hardware debug mode)
+  %\item \reg{LEAVE} (\char`\#117, leave stack frame)
+  %\item \reg{STM} (\char`\#118, set extended memory mode flag)
+  %\item \reg{CLM} (\char`\#119, clear extended memory mode flag)
+	%\item \reg{ENTER} (\char`\#135, enter stack frame)
+%\end{itemize}
+
+%The behaviour of these instructions is described in the instruction set reference section.
+
+%\section{Registers}
+%Some new registers were added in the Zyelios CPU 10:
+%\begin{itemize}
+  %\item \reg{MF} (\char`\#36, extended memory mode flag)
+	%\item \reg{PTBL} (\char`\#37, page table offset)
+	%\item \reg{PTBE} (\char`\#38, page table size)
+	%\item \reg{PCAP} (\char`\#39, paging capability)	
+	%\item \reg{PPAGE} (\char`\#41, previous page ID)
+	%\item \reg{MEMRQ} \char`\#42, memory request type)
+	%\item \reg{RAMSize} (\char`\#43, internal RAM size)
+	%\item \reg{HWDEBUG} (\char`\#58, hardware debug mode enabled)
+	%\item \reg{DBGSTATE} (\char`\#59, debug state)
+	%\item \reg{DBGADDR} (\char`\#60, debug address)
+	%\item \reg{CRL} (\char`\#61, current runlevel)
+	%\item \reg{TimerDT} (\char`\#62, internal register used by processor timer)
+	%\item \reg{MEMADDR} \char`\#62, memory request address)
+	%\item \reg{TimerMode} (\char`\#64, internal timer mode)
+	%\item \reg{TimerRate} (\char`\#65, timer rate)
+	%\item \reg{TimerPrevTime} (\char`\#66, previous timer fire time)
+	%\item \reg{TimerAddress} (\char`\#67, address of function to call on timer firing)
+%\end{itemize}
+
+%Operation of all these registers is explained in the advanced features section.
+
+%\section{Processor Modes}
+
+%\section{Instruction Format}
+%Zyelios CPU 10 adds support for using segment prefix along with a constant value (without referencing memory). This means that operands like \reg{ES:100} or \reg{EAX:500} are now recognized. This is implemented as a new RM byte value (50), which will be not recognized by the older processors.

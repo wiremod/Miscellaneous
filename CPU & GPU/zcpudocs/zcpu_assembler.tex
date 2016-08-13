@@ -1,0 +1,801 @@
+\chapter{HL-ZASM}
+
+\section{Description}
+HL-ZASM is a high-level assembler compiler and a programming language. It provides support for all the basic C high-level structures, while retaining compatibility with ZASM2 assembly code.
+
+\section{Keywords}
+There are certain characters and keywords that are reserved in the HL-ZASM compiler, and cannot be used as, for example, variable names. A variable name/function name/identifier can be any alphanumeric character, underscore (\reg{\textunderscore}). In some cases the dot (\reg{.}) symbol can be part of a label name.
+
+The following keywords are reserved: 
+\reg{GOTO}, \reg{FOR}, \reg{IF}, \reg{ELSE}, \reg{WHILE}, \reg{DO}, \reg{SWITCH}, \reg{CASE},
+\reg{CONST}, \reg{RETURN}, \reg{BREAK}, \reg{CONTINUE}, \reg{EXPORT}, \reg{FORWARD},
+\reg{DB}, \reg{ALLOC}, \reg{SCALAR}, \reg{VECTOR1F}, \reg{VECTOR2F}, \reg{UV}, \reg{VECTOR3F},
+\reg{VECTOR4F}, \reg{COLOR}, \reg{VEC1F}, \reg{VEC2F}, \reg{VEC3F}, \reg{VEC4F}, \reg{MATRIX},
+\reg{STRING}, \reg{DB}, \reg{DEFINE}, \reg{CODE}, \reg{DATA}, \reg{ORG}, \reg{OFFSET},
+\reg{VOID}, \reg{FLOAT}, \reg{CHAR}, \reg{INT48}, \reg{VECTOR}, \reg{PRESERVE}, \reg{ZAP}.
+
+The exact meaning and use of these keywords is detailed in the following chapters.
+
+\section{Assembler Syntax}
+\subsection{Basic Assembly}
+HL-ZASM supports the following common assembly syntax (Intel-like):
+\begin{verbatim}
+mov eax,123; //Moving constant into register
+mov eax,ebx; //Moving register into register
+
+add eax,123; //2-operand instruction
+jmp 123; //1-operand instruction on constant
+jmp eax; //1-operand instruction on register
+\end{verbatim}
+
+The two operands always follow the instruction. The first one is always the destanation operand, and the second one is the source operand.
+
+\subsection{Memory Access and Segments}
+It is possible to use both the traditional ZASM memory access symbol (\texttt{\char`\#}) or the more common square brackets (\texttt{[]}). Both are considered valid.
+
+The CPU also supports segment prefixes to offset memory reads (see page \pageref{segments} for more information on segments). It is possible to use any general-purpose or segment register as a segment prefix to any common operand.
+
+HL-ZASM allows for an 'inverted' syntax, which is when a segment prefix follows the operand itself (for example 'es:eax' instead of 'eax:es').
+
+When using common syntax for reading a value from memory, a segment prefix must be included inside the brackets. It is possible to use the plus sign (\texttt{+}) instead of a colon (\texttt{:}), but the common memory access syntax must be used.
+
+It is also possible to use a constant value as a segment prefix for a register via inverted syntax support. It is currently not possible to access a memory cell using a constant offset by a constant, but this will be fixed later.
+
+The following syntax for using memory access and segments is supported:
+\begin{verbatim}
+//ZASM2-style reading from memory
+mov eax,#100;
+mov eax,#eax;
+mov eax,es:#100;
+mov eax,es:#eax;
+mov eax,eax:#100;
+//mov eax,eax:#es; //Invalid: cannot use segment register as pointer
+
+//Common-style reading from memory
+mov eax,[100];
+mov eax,[eax];
+mov eax,[es:eax];
+mov eax,[es+eax];
+//mov eax,[eax:es]; //Invalid: cannot use segment register as pointer
+//mov eax,[eax+es]; //Invalid: cannot use segment register as pointer
+
+//Using constants with segments
+mov eax,es:100;
+mov eax,eax:100;
+mov eax,100:es;
+mov eax,100:eax;
+//mov eax,100:200; //Invalid
+
+//Using registers with segments
+mov eax,ebx:ecx;
+mov eax,es:ebx;
+mov eax,ebx:es; //Invalid, but translated into the valid 'es:ebx'
+//mov eax,fs:es; //Invalid, as no valid syntax is possible
+\end{verbatim}
+
+\subsection{Constants}
+It is possible to use constant expressions, hexadecimal values and label values in HL-ZASM:
+\begin{verbatim}
+//Constant integers
+mov eax,255;   //EAX = 255
+mov eax,0255;  //EAX = 255
+mov eax,0x1FF; //EAX = 511
+
+//Negative integers
+mov eax,-255;   //EAX = -255
+mov eax,-0x1FF; //EAX = -511
+
+//Floating point numbers and expressions
+mov eax,1e4;         //EAX = 10000
+mov eax,1.53e-3;     //EAX = 0.00153
+mov eax,1.284;       //EAX = 1.248
+mov eax,2.592+3.583; //EAX = 6.175
+mov eax,1e2+15;      //EAX = 115
+//mov eax,1e-5+0.034;//Does not parse (bug)
+mov eax,0xFF+100;    //EAX = 355
+
+//Complex expressions
+define labelname,512;
+mov eax,10+15;         //EAX = 25
+mov eax,10*(15+17*24); //EAX = 4230
+mov eax,10+labelname*53-10*(17-labelname); //EAX = 32096
+\end{verbatim}
+
+
+\subsection{Labels And Variables}
+Labels are used to branch to specific portions of code. Each label name is actually a number with a name assigned to it. That means that variable names and label names all have valid constant values, and can be used in expressions as parameters for various macros:
+\begin{verbatim}
+labelname:
+  jmp labelname;
+  mov eax,labelname+3;
+
+labelName: //case sensitive
+  jmp labelName;
+\end{verbatim}
+
+The \texttt{define} macro allow a label name to be assigned to any constant expression:
+\begin{verbatim}
+define defVar1,120;
+define defVar2,50+defVar1;
+//define defVar3,labelname2*10; //Does not parse, bug
+
+labelname2:
+  mov eax,defVar1; //120
+  mov eax,defVar2; //170
+//mov eax,defVar3; //170
+\end{verbatim}
+
+The \texttt{db} macro is used to write specific values to memory, bypassing any preprocessing. They will be written into the code segment:
+\begin{verbatim}
+db 100; //Outputs 100
+db 0xFF; //Ouputs 255
+db labelname2+10;
+db 'This is a string',0;
+db 15,28,595,'string',35,29;
+\end{verbatim}
+
+The \texttt{alloc} macro allocates space and allows it to be accessed by name, if one is given. It will be located at the current position in memory (if data and code are located in the same segment), or in a separate data segment, depending on the compiler preferences. The first parameter must either be a valid ident or a constant expression that does not start with an ident:
+\begin{verbatim}
+alloc var1,100,72; //alloc label,size,value, same as 'var1: db 72,72,72,...'
+alloc var2,100;    //alloc label,value, same as 'var2: db 100'
+alloc var3;        //alloc label, same as 'var3: db 0'
+alloc 120;         //alloc size, same as 'db 0,0,0,0,0....'
+
+define allocsize,120;
+alloc 0+allocsize; //must not start with an ident name
+\end{verbatim}
+
+There are also special macros for defining vector variables and string variables. The basic syntax is \texttt{VECTOR\textunderscore MACRO NAME,DEFAULT\textunderscore VALUE}. These are the examples of all available vector macros:
+\begin{verbatim}
+scalar name,...; //For example "scalar x,10"
+vector1f name,...;
+vector2f name,...;
+vector3f name,...;
+vector4f name,...;
+vec1f name,...;
+vec2f name,...;
+vec3f name,...;
+vec4f name,...;
+uv name,...; 
+color name,...; 
+matrix name; //No default initializer
+\end{verbatim}
+
+It's possible to get pointer to each of the members of the vector variable:
+\begin{verbatim}
+vector3f vec1;
+mov #vec1.x,10;
+mov #vec1.y,20;
+*(vec1.z) = 30;
+
+uv texcoord1;
+mov #texcoord1.u,10;
+mov #texcoord1.v,20;
+
+color col1;
+mov #col1.r,10;
+mov #col1.g,20;
+mov #col1.b,30;
+mov #col1.a,40;
+\end{verbatim}
+
+Matrix and vector variables can be used along with the vector extension of the ZCPU:
+\begin{verbatim}
+matrix m1;
+matrix m2;
+vector4f rot,0,0,1,45;
+
+mident m1; //Load identity matrix
+mrotate m2,rot; //Load rotation matrix
+
+mmul m1,m2; //Multiply two matrices
+\end{verbatim}
+
+There's also an additional macro which is not directly connected to creating variables, but it allows to change the current write pointer of the program (the location in memory at which program is being written). The macro is called \texttt{ORG}:
+\begin{verbatim}
+//Write pointer 0
+alloc 64;
+//Write pointer is now 64
+alloc 1;
+//Write pointer is now 65
+
+ORG 1000;
+//Write pointer is now 1000
+\end{verbatim}
+
+This macro can be used for slightly more advanced management of the code generation.
+
+There are also two special helper macros available that can be used to simplify variable declaration in the simple program: the \reg{DATA} and the \reg{CODE} macros. They are used like this:
+\begin{verbatim}
+DATA; //Data section
+  alloc var1;
+  alloc var2;
+  ......
+  subroutine1:
+    ....
+  ret
+  ....
+CODE; //Main code section
+  call subroutine1;
+  call subroutine2;
+  ......
+\end{verbatim}
+
+These macros are expanded into the following code:
+\begin{verbatim}
+//DATA
+jmp _code;
+
+//CODE
+_code:
+\end{verbatim}
+
+
+\section{Expression Generator}
+HL-ZASM has a built-in expression generator. It is possible to generate complex expressions that can involve function calls, registers, variables in a similar way as they are generated in the C code.
+
+Here are the several examples of various expressions:
+\begin{verbatim}
+EAX = 0 //Same as "mov eax,0"
+EAX += EBX //Same as "add EAX,EBX"
+
+main()
+print("text",999)
+R17 = solve("sol1",50,R5)
+R2 = R0 + R1*128
+c = *ptr++;
+
+R0 = (noise(x-1, y) + noise(x+1, y) + noise(x, y-1) + noise(x, y+1)) /  8
+Offset = 65536+32+MAX_DEVICES+udhBusOffset[busIndex*2]
+\end{verbatim}
+
+Extra care must be taken while using the expression generator, since it will use the 6 general purpose registers (\reg{EAX} .. \reg{EDI}) as temporary storage for evaulating the expressions.
+
+There is support for parsing constant expressions, which are reduced to a single constant value during compile time. It is possible to use the following syntax features in the expression parser:
+\singlespacing
+\begin{longtable}{|c|p{4.0in}|} \hline
+Syntax & Description \\ \hline
+\reg{-X}, \reg{+X} & Specify value sign, or negate the value \\ \hline
+\reg{\char`\&globalvar} & Pointer to a global variable (always constant) \\ \hline
+\reg{\char`\&stackvar} & Pointer to a stack variable (always dynamic) \\ \hline
+\reg{\char`\&globalvar[..]} & Pointer to an element of a global array \\ \hline
+\reg{\char`\&stackvar[..]} & Pointer to an element of a stack-based array \\ \hline
+\reg{1234} & Constant value \\ \hline
+\reg{"string"} & Pointer to a constant string, can be only used inside functions \\ \hline
+\reg{'c'} & Single character \\ \hline
+\reg{pointervar} & Constant pointer (or a label) \\ \hline
+\reg{EAX} & Register \\ \hline
+\reg{func(...)} & Function call \\ \hline
+\reg{var[...]} & Array access \\ \hline
+\reg{*var} & Read variable by pointer \\ \hline
+
+%
+\reg{expr + expr} & Addition \\ \hline
+\reg{expr - expr} & Subtraction \\ \hline
+\reg{expr * expr} & Product \\ \hline
+\reg{expr / expr} & Division \\ \hline
+\reg{expr \char`\^\char`\^  expr} & Raising to power \\ \hline
+\reg{expr \char`\&  expr} & Binary AND \\ \hline
+\reg{expr \char`\|  expr} & Binary OR \\ \hline
+\reg{expr \char`\^  expr} & Binary XOR \\ \hline
+\reg{expr \char`\&\char`\&  expr} & Logic AND \\ \hline
+\reg{expr \char`\|\char`\|  expr} & Logic OR \\ \hline
+
+\reg{expr = expr} & Assign (returns value of left side AFTER assigning) \\ \hline
+\reg{expr > expr} & Greater than \\ \hline
+\reg{expr >= expr} & Greater or equal than \\ \hline
+\reg{expr == expr} & Equal \\ \hline
+\reg{expr <= expr} & Less or equal than \\ \hline
+\reg{expr < expr} & Less than \\ \hline
+
+\reg{expr++} & Increment (returns value BEFORE incrementing) \\ \hline
+\reg{expr--} & Decrement (returns value BEFORE decrementing) \\ \hline
+\reg{++expr} & Increment (returns value AFTER incrementing) \\ \hline
+\reg{--expr} & Decrement (returns value AFTER decrementing) \\ \hline
+
+\end{longtable}
+\onehalfspacing
+
+Expression generator supports expressions inside opcodes as well.
+
+
+\section{Declaring Variables} \label{vardef}
+It's possible to declare variables in HL-ZASM the same way they are declared in the C programming language. It must be noted, however, that there is a difference between variables declared with this way, and variables declared using ZASM2 macros. It will be detailed a bit more on this problem further down.
+
+Variables may be declared either in global space (data segment), or local space (stack segment/stack frame). The variables declared in the global space are created at compile-time, while the stack-based variables are allocated runtime.
+
+\emph{Take note that variable declarations and variable definitions are two different things}. Variables are declared as shown below, but they can be defined using ZASM2 macros. Consider the following code:
+\begin{verbatim}
+float x;
+mov x,10;  //Set variable X to 10
+mov #x,10; //Same as '*(x) = 10'
+
+scalar y;
+mov y,10; //Does nothing, same as 'mov 123,10'
+mov #y,10; //Sets variable Y to 10
+\end{verbatim}
+
+There are three types supported by the compiler right now: \reg{float} (64-bit floating point variable), \reg{char} (64-bit floating point character code), \reg{void} (undeclared type/no assigned behaviour). Unlike the usual compilers, all three types work the same way, and are essentially the same thing:
+\begin{verbatim}
+float x;
+float y,z;
+char* w;
+char** u; //Pointer to a pointer
+
+//In all of these examples 'a' is a pointer to a character
+char * a;
+char* a;
+char *a;
+char b,*a;
+\end{verbatim}
+
+It's possible to use \reg{*} symbol to create pointers to variables. There is no difference on whether there are any whitespaces between the asterisk and the variable name (the asterisk belongs to the variable name).
+
+Arrays of constant size may be declared as variables. If array is located in global scope, \emph{all members will usually default to zero, although this is might not be the case if program is dynamically loaded by the OS}. If the array is declared in local scope, the contents of it may be undeclared. :
+\begin{verbatim}
+float arr[256];
+
+arr[100] = 123;
+R0 = arr[R1];
+\end{verbatim}
+
+There is no way to declare 2-dimensional arrays right now, but there will be support for that feature at some point.
+
+It's possible to use initializers for the arrays and the variables. It's only possible to use constant expressions as initializers for the global scope variables and arrays (there is no limit on what expressions may be used in the stack-based mode):
+\begin{verbatim}
+//Global scope
+float x = 10;
+float garr1[4] = { 0, 5, 7, 2 };
+float garr2[8] = { 1, 2 }; //Missing entries filled with zeroes
+float garr3[8] = { 1, 2, 0, 0, 0, 0, 0, 0 }; //Same as garr2
+
+//Local scope
+void func(float x,y) {
+  float z = x + y * 128;
+  float larr1[4] = { x, y, 0, 0 };
+  float larr2[16] = { x, 0, y }; //Missing entries filled with zeroes
+}
+\end{verbatim}
+
+There is also support for creating variables, which are stored in the processors registers. To do this their type must be prepended with the \reg{register} keyword. Local variables in registers work much faster than the stack-based local variables, but they cannot be an array type (they can be a pointer though):
+\begin{verbatim}
+void strfunc(char *str) {
+  register char *ptr = str;  
+  *ptr++ = 'A';
+}
+\end{verbatim}
+
+There is a limit on how much local register variables there can be.
+
+
+\section{Declaring Functions}
+It's possible to use C-style function declaration syntax, although only one style is currently supported:
+\begin{verbatim}
+return_type function_name(param_type1 name1, name2, param_type2 name3) {
+  ....
+  code
+  ....
+}
+\end{verbatim}
+
+Parameters are defined the same way the variables are defined, see page \pageref{vardef}. It's possible to use constant-size arrays as variables into function, but \emph{there is no way to actually pass them into the function right now}. It's also possible to use sizeless array as a parameter (see examples).
+
+Examples of declaring functions:
+\begin{verbatim}
+void main() { .. }
+float func1() { .. }
+float func2(float x, y, float z) { .. }
+
+char strcmp(char* str1, char* str2) { .. }
+float strlen(char str[]) { .. } //'char str[]' is same as 'char* str'
+
+//no way to actually pass an array like this:
+void dowork(char str[256]) { .. } 
+\end{verbatim}
+
+There are two kinds of function declarations - normal declarations, and forward declarations. Normal function declarations can be anywhere in the code, and there's no restriction on using them from any other part of the program. Forward function declarations must always precede the function use (or they must be declared beforehand without the function body).
+
+The forward function declarations allow to perform strict arguments check, and they allow overriding the function to have different parameter lists while having the same name. A function can be forward-declared by using the \reg{FORWARD} keyword before the function type:
+\begin{verbatim}
+//Forward declarations before use
+forward void func(); //First function
+forward void func(float x); //Second function
+forward void func(float x, *y);
+
+func(); //Calls first function
+func(10); //Calls second function
+
+func2(); //COMPILE ERROR: function 'func2' is not declared
+
+//Actual function bodies
+forward void func() { //First function
+  ...
+}
+forward void func(float x) { //Second function
+  ...
+}
+forward void func(float x, *y) {
+  ...
+}
+forward void func2() {
+  ...
+}
+\end{verbatim}
+
+Unlike the forward function declarations, the normal functions can be used from anywhere in the code, but they do not provide strict argument type checks:
+\begin{verbatim}
+void func1() { .. }
+
+func1();
+func2(); //Works even thought it's not yet declared
+
+void func2() { .. }
+\end{verbatim}
+
+There's also an additional keyword that can be used when defining functions - \reg{EXPORT}. If this keyword is used, the function name will be preserved in the generated library (see page \pageref{libgen} for more informations on how to generate libraries). The compiler will also add a declaration for this function automatically in the generated library file:
+\begin{verbatim}
+export void func1() { .. }
+void func2() { .. } //Function name will be mangled in the resulting file
+\end{verbatim}
+
+
+\section{Function Calling}
+\subsection{Calling Convention}
+HL-ZASM uses the \reg{cdecl} calling convention. The function result is passed via the EAX register. If the function is not forward-declared, or if it has variable argument count, then the ECX register must be set to the parameter count:
+\begin{verbatim}
+R0 = func(a,b,c);
+
+//Same as:
+push c;
+push b;
+push a;
+mov ecx,3; //Optional if forward-declared
+call func;
+add esp,3; //Must clean up stack
+mov r0,eax; //Return result
+
+main();
+
+//Same as:
+mov ecx,0;
+call func;
+\end{verbatim}
+
+The function will modify EAX, ECX, EBP registers (along with the ESP register), and may modify all other registers unless they are marked as preserved (see \pageref{preserve}).
+
+\subsection{Stack Frame}
+The HL-ZASM uses the ZCPU stack frame management instructions (\reg{ENTER}, \reg{LEAVE}) for creating a stack frame for the function. It will pass number of local variables into the \reg{ENTER} instruction, so it will create a stack frame with pre-allocated space for local variables.
+
+The function would generate such code:
+\begin{verbatim}
+void func(float x,y) {
+  float z,w;
+  ...
+}
+
+//Generates:
+func:
+  enter 2;
+    ....
+  leave;
+  ret
+\end{verbatim}
+
+All the access to variables on stack is done via the \reg{RSTACK}, \reg{SSTACK} instructions. The compiler will use \reg{EBP:X} as the stack offset, where \reg{EBP} is the stack frame base register, and \reg{X} is the offset of the target value on stack. For example:
+\begin{verbatim}
+void func(float x,y) {
+  float z,w;
+}
+
+//These values would be laying on stack
+//[ 3] Y
+//[ 2] X
+//[ 1] Return address
+//[ 0] Saved value of EBP (at function call)
+//[-1] Z
+//[-1] Z
+
+//Therefore this would be valid:
+rstack R0,EBP:2  //R0 = X
+rstack R1,EBP:3  //R1 = Y
+rstack R2,EBP:-1 //R2 = Z
+rstack R3,EBP:-2 //R3 = W
+\end{verbatim}
+
+Therefore it's possible to generate a stack trace using the following code:
+\begin{verbatim}
+void stack_trace() {
+  char* returnAddress,savedEBP;
+  
+  R0 = EBP; //'Current' EBP
+  while ((R0 > 0) && (R0 < 65535)) {
+    rstack returnAddress,R0:1;
+    rstack savedEBP,R0:0;    
+    
+    add_to_trace(returnAddress);    
+    R0 = savedEBP;
+  }
+}
+\end{verbatim}
+
+\subsection{Preserving Registers} \label{preserve}
+If the current program makes use of any ZCPU registers, it must mark them as preserved so the expression generator does not use those registers for purpose of calculating expressions.
+
+The compiler will give out warning when unpreserved registers are being used. Right now only EAX-EDI registers must be marked as preserved (since only those are used for expression generator):
+\begin{verbatim}
+void func(float x,y) {
+  preserve EAX, EBX;
+  
+  //Expression generator will never change EAX or EBX registers
+  EAX = 123;
+  EBX = x*10 + y;
+}
+\end{verbatim}
+
+
+
+
+
+
+
+
+
+\section{Control Structures}
+The HL-ZASM compiler supports common C control structures, although right now the support is limited.
+
+The conditional branching can be done via the \reg{if} construct. The \reg{else} clause, and the \reg{else if} are supported. It's possible to branch into a single expression, or into an entire block of code too:
+\begin{verbatim}
+//Can use blocks
+if (expression) {
+  ....
+} else if (expression) {
+  ....
+} else {
+  ....
+}
+
+//Can avoid using blocks:
+if (expression) expression;
+if (expression) expression1 else expression2;
+\end{verbatim}
+
+HL-ZASM supports \reg{for} loops. The syntax is:
+\begin{verbatim}
+for (initializer; condition; step) { ... }
+\end{verbatim}
+where \reg{initializer} is the expression that will be executed to setup the loop, \reg{condition} is the condition that is tested on each step, and \reg{step} is the expression executed after each step. For example:
+\begin{verbatim}
+float x;
+for (x = 0; x < 128; x++) { .. } //Loop for X from 0 to 127
+for (x = 128; x > 0; x--) { .. } //Loop for X from 128 to 1
+for (;;) { .. } //Infinite loop
+\end{verbatim}
+
+It's possible to use the \reg{while} loop (but no support for \reg{do - while} loops yet):
+\begin{verbatim}
+while (expression) { ... }
+while ((x < y) && (x > 0)) { ... }
+while (1) { ... } //Infinite loop
+\end{verbatim}
+
+The \reg{break} keyword can be used to end the currently executed loop, for example:
+\begin{verbatim}
+while(1) {
+  if (condition) {
+    break;
+  }
+  ....
+}
+\end{verbatim}
+
+It's possible to use the \reg{continue} keyword to go on to the next step in the loop. For example:
+\begin{verbatim}
+float x;
+for (x = 0; x < 128; x++) {
+  if (x == 50) { //Skip iteration 50
+    continue;
+  }
+}
+\end{verbatim}
+
+It's also possible to define labels, and then jump to those labels by defining them the same way they are defined in ZASM2, and using \reg{GOTO}:
+\begin{verbatim}
+....
+  goto label1; //Jumps to label1
+....
+  label1:
+\end{verbatim}
+
+When using the \reg{GOTO} it's also possible to pass a complex expression into it:
+\begin{verbatim}
+goto function_entrypoints[10];
+\end{verbatim}
+
+
+\section{Preprocessor}
+The HL-ZASM preprocessor supports C-style preprocessor macros. Preprocessor macros are always last on the current line (it is not possible to write two preprocessor macros on same line).
+
+\subsection{C Runtime Library Macros} \label{crtmacro}
+By default programs compiled with HL-ZASM have no attached runtime library, and would require rewriting all the basic routines. It is possible to link to a runtime library of a choice though. The default runtime library is called \reg{ZCRT}, and it allows to boot up the ZCPU without any additional software.
+
+The CRT library can be picked with the following preprocessor macro. It must be located in the first line of code, before any other code is generated, otherwise it will not work correctly (macro is case-insensitive):
+\begin{verbatim}
+#pragma CRT ZCRT
+\end{verbatim}
+
+This macro will add CRT folder as one of the search paths, and include the main CRT file:
+\begin{verbatim}
+#pragma SearchPath lib\zcrt\
+#include <zcrt\main.txt>
+\end{verbatim}
+
+This makes it possible to use the default libraries that belong to that runtime library. See page \pageref{zcrtlib} for more information on the \reg{ZCRT} library.
+
+\subsection{Definition And Conditional Macros}
+It is possible to use the C style definition preprocessor macros (it is not possible to define preprocessor functions yet though). It supports the \reg{\char`\#define}, \reg{\char`\#ifdef}, \reg{\char`\#elseif}, \reg{\char`\#else}, \reg{\char`\#endif} and the \reg{\char`\#undef} macros:
+\begin{verbatim}
+#define DEF1
+#define DEF2 1234
+
+#ifdef DEF1
+  func(DEF2) //same as func(1234)
+  ...
+#elseif DEF2
+  ....
+#else
+  ...
+#endif
+
+#undef DEF1
+\end{verbatim}
+
+\subsection{File Inclusion Macros}
+The preprocessor supports including external files using the \reg{\char`\#include} macro:
+\begin{verbatim}
+#include "filename"
+#include <filename>
+\end{verbatim}
+
+The \reg{\char`\#include "filename"} macro will include file from the current working directory. This is the same directory the main (first) compiled source file is located in. The other version of this macro includes file relative to the base directory (\reg{CPUChip}).
+
+If file is not found, it will also be searched on one of the search paths.
+
+The preprocessor also supports the ZASM2 file include syntax:
+\begin{verbatim}
+##include## filename
+same as
+#include <filename>
+\end{verbatim}
+
+\subsection{Special Compiler Commands}
+There are several special compiler commands available through the \reg{\char`\#pragma} macro.
+
+The \reg{\char`\#pragma set} macro allows user to modify settings of the compiler. Example of the syntax (everything is case-sensitive):
+\begin{verbatim}
+#pragma set OutputResolveListing true
+\end{verbatim}
+
+There are the following settings available:
+\singlespacing
+\begin{longtable}{|c|c|p{3.0in}|} \hline
+Name & Default & Description \\ \hline
+CurrentLanguage        & HLZASM  & Current compiler language. Can be HLZASM or ZASM2 \\ \hline
+CurrentPlatform        & CPU     & Target platform. Defines the feature set, cannot be modified \\ \hline
+MagicValue             & -700500 & The magic value is used in place of an erroneous constant value \\ \hline
+OptimizeLevel          & 0       & Optimizer level. 0 is none, 1 is low, 2 is high. Not supported right now. \\ \hline
+
+OutputCodeTree         & false   & Output code tree\\ \hline
+OutputResolveListing   & false   & Output code listing for resolve stage \\ \hline
+OutputFinalListing     & false   & Output code listing for final stage \\ \hline
+OutputTokenListing     & false   & Output tokenized sourcecode \\ \hline
+OutputBinaryListing    & false   & Output final binary dump as listing \\ \hline
+OutputDebugListing     & false   & Output the debug data as listing \\ \hline
+OutputToFile           & false   & Output listings to files instead of to the console \\ \hline
+OutputOffsetsInListing & true    & Output binary offsets in listings \\ \hline
+OutputLabelsInListing  & true    & Output label names in final listing \\ \hline
+GenerateComments       & true    & Generate extra comments in output listing \\ \hline
+
+FixedSizeOutput        & false   & Output fixed-size instructions (can be toggled at any time) \\ \hline
+SeparateDataSegment    & false   & Puts all variables into separate data segment Not supported right now. \\ \hline
+GenerateLibrary        & false   & Generate a precompiled library. See page \pageref{libgen} \\ \hline
+AlwaysEnterLeave       & false   & Always generate the enter/leave blocks in functions \\ \hline
+NoUnreferencedLeaves   & true    & Do not compile functions and variables which are not used by the program \\ \hline
+\end{longtable}
+\onehalfspacing
+
+The \reg{\char`\#pragma language} macro can be used in place of setting the language via changing the compiler variables:
+\begin{verbatim}
+#pragma language zasm
+#pragma set CurrentLanguage ZASM2
+\end{verbatim}
+
+The \reg{\char`\#pragma crt} macro can be used to attach a C runtime library. See page \pageref{crtmacro} for more information.
+
+The \reg{\char`\#pragma cpuname} macro is used to assign a specific name to the target processor:
+\begin{verbatim}
+#pragma CPUName ACPI Power Controller
+\end{verbatim}
+
+\subsection{Preprocessor Definitions}
+There are several preprocessor definitions and special labels available for use by the programmer:
+\singlespacing
+\begin{longtable}{|c|p{4.0in}|} \hline
+Bit & Description \\ \hline
+\reg{\textunderscore \textunderscore PTR\textunderscore \textunderscore} & Current write pointer \\ \hline
+\reg{\textunderscore \textunderscore LINE\textunderscore \textunderscore} & Current line number \\ \hline
+\reg{\textunderscore \textunderscore FILE\textunderscore \textunderscore} & Current file name (a string) \\ \hline
+\reg{\textunderscore \textunderscore DATE\textunderscore YEAR\textunderscore \textunderscore} & Current year (at compile time) \\ \hline
+\reg{\textunderscore \textunderscore DATE\textunderscore MONTH\textunderscore \textunderscore} & Current month (at compile time) \\ \hline
+\reg{\textunderscore \textunderscore DATE\textunderscore DAY\textunderscore \textunderscore} & Current day (at compile time) \\ \hline
+\reg{\textunderscore \textunderscore DATE\textunderscore HOUR\textunderscore \textunderscore} & Current hour (at compile time) \\ \hline
+\reg{\textunderscore \textunderscore DATE\textunderscore MINUTE\textunderscore \textunderscore} & Current minute (at compile time) \\ \hline
+\reg{\textunderscore \textunderscore DATE\textunderscore SECOND\textunderscore \textunderscore} & Current second (at compile time) \\ \hline
+\reg{\textunderscore \textunderscore PROGRAMSIZE\textunderscore \textunderscore} & Total size of the program in bytes \\ \hline
+\reg{programsize} & Total size of the program in bytes (ZASM2 compatibility macro) \\ \hline
+\end{longtable}
+\onehalfspacing
+
+
+\section{Advanced Features}
+\subsection{Generating Libraries} \label{libgen}
+no chapter
+\subsection{Optimizer} \label{optimizer}
+no chapter
+\subsection{ZCRT Library Reference} \label{zcrtlib}
+no chapter but lots of incredible fun
+
+
+\section{List Of Errors}
+\subsection{General Compiler Errors}
+\subsubsection{Undefined label}
+Previously unknown label, variable, or function call was never declared in the current scope.
+
+\subsubsection{Variable redefined}
+Variable or function with this name was already defined previously in the scope. Error message will point to initial definition.
+
+\subsubsection{Identifier expected}
+Expression generator expects identifier to follow (variable/function name, etc).
+
+\subsubsection{Expression expected, got ...}
+There was something unexpected in the source code at that position. Can also indicate invalid expression syntax.
+
+\subsubsection{Ident ... is not a variable/pointer/array}
+Unable to get pointer of the given identifier.
+
+\subsubsection{Invalid instruction operand}
+The ZCPU does not support the given instruction operand. Can indicate that segment prefix is used for segment register access, or for port access.
+
+\subsubsection{Undefined opcode}
+Given opcode is not supported by the current architecture.
+
+\subsubsection{Array size must be constant}
+It's only possible to define arrays which have constant size. There is no support for declaring variable-sized arrays.
+
+\subsubsection{Cannot have expressions in global initializers}
+There is no support for having complex expressions as variable initializers right now.
+
+\subsubsection{Can only zap/preserve registers inside functions/local blocks}
+Compiler does not support preserving registers in global scope right now.
+
+\subsubsection{... must be constant}
+A constant value is expected, and it must not rely on values of any unknown variables or labels.
+
+\subsubsection{Expected ... got ... instead}
+Invalid syntax is being used for some specific language structure.
+
+\subsubsection{Out of free registers}
+This error indicates one of the following things:
+\begin{itemize}
+	\item There are no more free registers to use due to too much local register variables allocated.
+	\item The expression being generated was too complex (there are not enough unallocated registers).
+	\item Internal compiler error.
+\end{itemize}
+
+\subsubsection{Unable to include CRT library}
+Invalid runtime library name/library is not found.
+
+\subsubsection{Cannot open file}
+File was not found in the specified folder, and it was not found on one of the search paths.
+
+\subsubsection{Internal error ...}
+Internal compiler error (is not an error that can be worked around).

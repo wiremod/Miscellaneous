@@ -1,0 +1,98 @@
+\newcommand{\regentry}[3]{\texttt{#1} & \texttt{#2} & #3 \\ \hline}
+
+\chapter{Internal Registers}
+The processor has several internal registers which are used to store the internal processor state or control advanced processor features. It is possible to read or write most of these registers using \reg{CPUSET} and \reg{CPUGET}.
+
+For example:
+
+\begin{verbatim}
+CPUGET EAX,24 //Read register 24 into EAX 
+              //24 is the interrupt descriptor table pointer
+CPUSET 9,EBX //Set register 9 (stack size) to EBX
+
+CPUGET EAX,1000 //Invalid register will set EAX to 0
+\end{verbatim}
+
+The registers \reg{XEIP}, \reg{CPAGE}, \reg{PPAGE}, \reg{SerialNo}, \reg{CODEBYTES}, \reg{TimerDT}, \reg{RAMSize} are read-only - it is not possible to change their value by any means.
+
+Changing value of the \reg{IP} or the \reg{CS} register is possible, and will be handled as a far jump.
+
+See the section \ref{advfeatures} for description of how some of the registers are used.
+
+%\newpage
+
+\singlespacing
+\begin{longtable}{|c|c|p{3.4in}|} \hline
+Mnemonic & Number & Description \\ \hline
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\regentry{IP}           {00}{Instruction pointer}
+\regentry{EAX}          {01}{General purpose register A}
+\regentry{EBX}          {02}{General purpose register B}
+\regentry{ECX}          {03}{General purpose register C}
+\regentry{EDX}          {04}{General purpose register D}
+\regentry{ESI}          {05}{Source index}
+\regentry{EDI}          {06}{Destanation index}
+\regentry{ESP}          {07}{Stack pointer}
+\regentry{EBP}          {08}{Base pointer}
+\regentry{ESZ}          {09}{Stack size}
+
+\regentry{CS}           {16}{Code segment}
+\regentry{SS}           {17}{Stack segment}
+\regentry{DS}           {18}{Data segment}
+\regentry{ES}           {19}{Extra segment}
+\regentry{GS}           {20}{User segment}
+\regentry{FS}           {21}{User segment}
+\regentry{KS}           {22}{Key segment}
+\regentry{LS}           {23}{Library segment}
+
+\regentry{IDTR}         {24}{Interrupt descriptor table pointer}
+\regentry{CMPR}         {25}{Comparsion result register}
+\regentry{XEIP}         {26}{Pointer to start of currently executed instruction}
+\regentry{LADD}         {27}{Current interrupt code}
+\regentry{LINT}         {28}{Current interrupt number}
+\regentry{TMR}          {29}{Instruction/cycle counter}
+\regentry{TIMER}        {30}{Internal precise timer}
+\regentry{CPAGE}        {31}{Current page number}
+\regentry{IF}           {32}{Interrupts enabled flag}
+\regentry{PF}           {33}{Protected mode flag}
+\regentry{EF}           {34}{Extended mode flag}
+\regentry{NIF}          {35}{Next cycle interrupt enabled flag state}
+\regentry{MF}           {36}{Extended memory mapping flag}
+\regentry{PTBL}         {37}{Page table offset}
+\regentry{PTBE}         {38}{Page table number of entries}
+\regentry{PCAP}         {39}{Processor paging system capability}
+\regentry{RQCAP}        {40}{Processor delayed memory request capability}
+
+\regentry{PPAGE}        {41}{Previous page ID}
+\regentry{MEMRQ}        {42}{Type of the memory request}
+
+\regentry{RAMSize}      {43}{Amount of internal memory}
+\regentry{External}     {44}{External I/O operation}
+\regentry{BusLock}      {45}{Is bus locked for read/write}
+\regentry{Idle}         {46}{Should CPU skip some cycles}
+\regentry{INTR}         {47}{Handling an interrupt}
+
+\regentry{SerialNo}     {48}{Processor serial number}
+\regentry{CODEBYTES}    {49}{Amount of bytes executed so far}
+\regentry{BPREC}        {50}{Binary precision level}
+\regentry{IPREC}        {51}{Integer precision level}
+\regentry{NIDT}         {52}{Number of interrupt descriptor table entries}
+\regentry{BlockStart}   {53}{Start offset of the block}
+\regentry{BlockSize}    {54}{Block size}
+\regentry{VMODE}        {55}{Vector mode (2: 2D, 3: 3D)}
+\regentry{XTRL}         {56}{Runlevel for external memory access}
+\regentry{HaltPort}     {57}{Halt until this port changes value}
+\regentry{HWDEBUG}      {58}{Hardware debug mode active}
+\regentry{DBGSTATE}     {59}{Hardware debug mode state}
+\regentry{DBGADDR}      {60}{Hardware debug mode address/parameter}
+\regentry{CRL}          {61}{Current runlevel}
+\regentry{TimerDT}      {62}{Current timer discrete step}
+\regentry{MEMADDR}      {63}{Address reqested by the memory operation}
+
+\regentry{TimerMode}    {64}{Timer mode (off, instructions, seconds)}
+\regentry{TimerRate}    {65}{Timer rate}
+\regentry{TimerPrevTime}{66}{Previous timer fire time}
+\regentry{TimerAddress} {67}{Number of external interrupt to call when timer fires}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\end{longtable}	
+\onehalfspacing

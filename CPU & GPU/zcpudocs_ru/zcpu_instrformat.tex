@@ -1,0 +1,232 @@
+\chapter{Формат инструкций} \label{instructionformat}
+\section{Формат}
+Каждая инструкция в ZCPU начинается с одного байта, который определяет, какая инструкция должна быть выполнена. Если у инструкции есть операнды, то далее следует селектор \emph{RM} (register/memory). Этот дополнительный байт указывает, какого типа операнды используются с инструкцией.
+
+Номер инструкции также содержит информацию про использование сегментного префикса, и про текущий режим выполнения (см. стр \pageref{localexec}). Номер инструкции может принадлежать к одному из таких интервалов:
+\begin{itemize}
+	\item \reg{000 – 999}: инструкции переменной длины
+	\item \reg{1000 – 1999}: инструкции переменной длины с сегментным префиксом для 1ого операнда
+	\item \reg{10000 – 10999}: инструкции переменной длины с сегментным префиксом для 2ого операнда
+	\item \reg{11000 – 11999}: инструкции переменной длины с сегментным префиксом для обоих операндов
+	\item \reg{2000 – 2999}: инструкции постоянной длины
+	\item \reg{3000 – 3999}: инструкции постоянной длины с сегментным префиксом для 1ого операнда
+	\item \reg{12000 – 12999}: инструкции постоянной длины с сегментным префиксом для 2ого операнда
+	\item \reg{13000 – 13999}: инструкции постоянной длины с сегментным префиксом для обоих операндов
+\end{itemize}
+
+Далее могут следовать несколько байтов, которые указуют сегментный префикс, константы, и т.п. Константные значения всегда последние в описании каждой инструкции. Вот пример разных инструкций:
+\begin{verbatim}
+STEF            48
+INC EAX         20, 1
+MOV EAX,10      14, 1, 10
+ADD EAX,ESP     10, 70001
+DIV EBX,ES:ECX  10013, 290002, 4
+ADD R0,#R2      10, 20822048
+MOV #100,#500   14, 250025, 100, 500
+MOV EAX:#50,GS  1014, 130025, 9, 50
+\end{verbatim}
+
+\section{Селектор Регистра-Памяти}
+Селектор RM состоит из двух частей - селектор для первого операнда, и второго операнда: $RM = RM_1 + 10000 \cdot RM_2$.
+
+Например, вот пример значений байтов RM, и как они декодируются:
+\begin{verbatim}
+                RM        RM1   RM2
+STEF            н/о       н/о   н/о
+INC EAX         1         1     н/о
+MOV EAX,10      1         1     0
+ADD EAX,ESP     70001     1     7
+DIV EBX,ES:ECX  290002    2     29
+ADD R0,#R2      20822048  2048  2082
+MOV #100,#500   250025    25    25
+MOV EAX:#50,GS  130025    25    13
+\end{verbatim}
+
+Вот эти селекторы сейчас поддерживаются процессором:
+\singlespacing
+\begin{longtable}{|c|c|p{3.0in}|} \hline
+Селектор & Операнд & Описание \\ \hline
+\texttt{0} & \reg{123} & Константное значение \\ \hline
+
+\texttt{1} & \reg{EAX} & Регистр \reg{EAX} \\ \hline
+\texttt{2} & \reg{EBX} & Регистр \reg{EBX} \\ \hline
+\texttt{3} & \reg{ECX} & Регистр \reg{ECX} \\ \hline
+\texttt{4} & \reg{EDX} & Регистр \reg{EDX} \\ \hline
+\texttt{5} & \reg{ESI} & Регистр \reg{ESI} \\ \hline
+\texttt{6} & \reg{EDI} & Регистр \reg{EDI} \\ \hline
+\texttt{7} & \reg{ESP} & Регистр \reg{ESP} \\ \hline
+\texttt{8} & \reg{EBP} & Регистр \reg{EBP} \\ \hline
+
+\texttt{9} & \reg{CS} & Регистр \reg{CS} \\ \hline
+\texttt{10} & \reg{SS} & Регистр \reg{SS} \\ \hline
+\texttt{11} & \reg{DS} & Регистр \reg{DS} \\ \hline
+\texttt{12} & \reg{ES} & Регистр \reg{ES} \\ \hline
+\texttt{13} & \reg{GS} & Регистр \reg{GS} \\ \hline
+\texttt{14} & \reg{FS} & Регистр \reg{FS} \\ \hline
+\texttt{15} & \reg{KS} & Регистр \reg{KS} \\ \hline
+\texttt{16} & \reg{LS} & Регистр \reg{LS} \\ \hline
+
+\texttt{17} & \reg{\char`\#EAX}, \reg{ES:\char`\#EAX} & Ячейка памяти \reg{EAX + сегмент} \\ \hline
+\texttt{18} & \reg{\char`\#EBX}, \reg{ES:\char`\#EBX} & Ячейка памяти \reg{EBX + сегмент} \\ \hline
+\texttt{19} & \reg{\char`\#ECX}, \reg{ES:\char`\#ECX} & Ячейка памяти \reg{ECX + сегмент} \\ \hline
+\texttt{20} & \reg{\char`\#EDX}, \reg{ES:\char`\#EDX} & Ячейка памяти \reg{EDX + сегмент} \\ \hline
+\texttt{21} & \reg{\char`\#ESI}, \reg{ES:\char`\#ESI} & Ячейка памяти \reg{ESI + сегмент} \\ \hline
+\texttt{22} & \reg{\char`\#EDI}, \reg{ES:\char`\#EDI} & Ячейка памяти \reg{EDI + сегмент} \\ \hline
+\texttt{23} & \reg{\char`\#ESP}, \reg{ES:\char`\#ESP} & Ячейка памяти \reg{ESP + сегмент} \\ \hline
+\texttt{24} & \reg{\char`\#EBP}, \reg{ES:\char`\#EBP} & Ячейка памяти \reg{EBP + сегмент} \\ \hline
+
+\texttt{25} & \reg{\char`\#123}, \reg{ES:\char`\#123} & Ячейка памяти за константным указателём \\ \hline
+
+\texttt{26} & \reg{ES:EAX} & Регистр \reg{EAX + сегмент} \\ \hline
+\texttt{27} & \reg{ES:EBX} & Регистр \reg{EBX + сегмент} \\ \hline
+\texttt{28} & \reg{ES:ECX} & Регистр \reg{ECX + сегмент} \\ \hline
+\texttt{29} & \reg{ES:EDX} & Регистр \reg{EDX + сегмент} \\ \hline
+\texttt{30} & \reg{ES:ESI} & Регистр \reg{ESI + сегмент} \\ \hline
+\texttt{31} & \reg{ES:EDI} & Регистр \reg{EDI + сегмент} \\ \hline
+\texttt{32} & \reg{ES:ESP} & Регистр \reg{ESP + сегмент} \\ \hline
+\texttt{33} & \reg{ES:EBP} & Регистр \reg{EBP + сегмент} \\ \hline
+
+\texttt{34} & No syntax & Ячейка памяти \reg{EAX + константа} \\ \hline
+\texttt{35} & No syntax & Ячейка памяти \reg{EBX + константа} \\ \hline
+\texttt{36} & No syntax & Ячейка памяти \reg{ECX + константа} \\ \hline
+\texttt{37} & No syntax & Ячейка памяти \reg{EDX + константа} \\ \hline
+\texttt{38} & No syntax & Ячейка памяти \reg{ESI + константа} \\ \hline
+\texttt{39} & No syntax & Ячейка памяти \reg{EDI + константа} \\ \hline
+\texttt{40} & No syntax & Ячейка памяти \reg{ESP + константа} \\ \hline
+\texttt{41} & No syntax & Ячейка памяти \reg{EBP + константа} \\ \hline
+
+\texttt{42} & No syntax & Регистр \reg{EAX + константа} \\ \hline
+\texttt{43} & No syntax & Регистр \reg{EBX + константа} \\ \hline
+\texttt{44} & No syntax & Регистр \reg{ECX + константа} \\ \hline
+\texttt{45} & No syntax & Регистр \reg{EDX + константа} \\ \hline
+\texttt{46} & No syntax & Регистр \reg{ESI + константа} \\ \hline
+\texttt{47} & No syntax & Регистр \reg{EDI + константа} \\ \hline
+\texttt{48} & No syntax & Регистр \reg{ESP + константа} \\ \hline
+\texttt{49} & No syntax & Регистр \reg{EBP + константа} \\ \hline
+
+\texttt{50} & \reg{ES:123} & Константное значение с сегментом \\ \hline
+
+\texttt{1000} & \reg{PORT0} & Порт 0 \\ \hline
+\texttt{1001} & \reg{PORT1} & Порт 1 \\ \hline
+\texttt{....} & \reg{....} & .... \\ \hline
+\texttt{2023} & \reg{PORT1023} & Порт 1023 \\ \hline
+
+\texttt{2048} & \reg{R0} & Расширеный регистр \reg{R0} \\ \hline
+\texttt{....} & \reg{....} & .... \\ \hline
+\texttt{2079} & \reg{R31} & Расширеный регистр \reg{R31} \\ \hline
+
+\texttt{2080} & \reg{\char`\#R0}, \reg{ES:\char`\#R0} & Ячейка памяти \reg{R0 + сегмент} \\ \hline
+\texttt{....} & \reg{....} & .... \\ \hline
+\texttt{2111} & \reg{\char`\#R31}, \reg{ES:\char`\#R31} & Ячейка памяти \reg{R31 + сегмент} \\ \hline
+
+\texttt{2112} & \reg{ES:R0} & Extended register \reg{R0 + сегмент} \\ \hline
+\texttt{....} & \reg{....} & .... \\ \hline
+\texttt{2143} & \reg{ES:R31} & Extended register \reg{R31 + сегмент} \\ \hline
+
+\texttt{2144} & No syntax & Ячейка памяти \reg{R0 + константа} \\ \hline
+\texttt{....} & \reg{....} & .... \\ \hline
+\texttt{2175} & No syntax & Ячейка памяти \reg{R31 + константа} \\ \hline
+
+\texttt{2176} & No syntax & Extended register \reg{R0 + константа} \\ \hline
+\texttt{....} & \reg{....} & .... \\ \hline
+\texttt{2207} & No syntax & Extended register \reg{R31 + константа} \\ \hline
+\end{longtable}
+\onehalfspacing
+
+\section{Сегментные префикс}
+Сегменты указываются байтом, который следует за селектором RM. Например, вот несколько примеров разных префиксов:
+\begin{verbatim}
+MOV EAX,EBX        14,20001
+MOV LS:EAX,EBX     1014,20027,8
+MOV EAX,LS:EBX     10014,280001,8
+MOV LS:EAX,LS:EBX  11014,280027,8,8
+MOV R0:EAX,EBX     1014,20027,17
+MOV EAX,R0:EBX     10014,280001,17
+MOV R0:EAX,R0:EBX  11014,280027,17,17
+\end{verbatim}
+
+Вот список доступных сегментных префиксов:
+\singlespacing
+\begin{tabular}{|c|c|c|c|} \hline
+Value & Регистр & Value & Register\\ \hline
+\texttt{-02} & \reg{CS} & \texttt{01} & \reg{CS}\\ \hline
+\texttt{-03} & \reg{SS} & \texttt{02} & \reg{SS} \\ \hline
+\texttt{-04} & \reg{DS} & \texttt{03} & \reg{DS} \\ \hline
+\texttt{-05} & \reg{ES} & \texttt{04} & \reg{ES} \\ \hline
+\texttt{-06} & \reg{GS} & \texttt{05} & \reg{GS} \\ \hline
+\texttt{-07} & \reg{FS} & \texttt{06} & \reg{FS} \\ \hline
+\texttt{-08} & \reg{KS} & \texttt{07} & \reg{KS} \\ \hline
+\texttt{-09} & \reg{LS} & \texttt{08} & \reg{LS} \\ \hline
+\texttt{-10} & \reg{EAX} & \texttt{09} & \reg{EAX} \\ \hline
+\texttt{-11} & \reg{EBX} & \texttt{10} & \reg{EBX} \\ \hline
+\texttt{-12} & \reg{ECX} & \texttt{11} & \reg{ECX} \\ \hline
+\texttt{-13} & \reg{EDX} & \texttt{12} & \reg{EDX} \\ \hline
+\texttt{-14} & \reg{ESI} & \texttt{13} & \reg{ESI} \\ \hline
+\texttt{-15} & \reg{EDI} & \texttt{14} & \reg{EDI} \\ \hline
+\texttt{-16} & \reg{ESP} & \texttt{15} & \reg{ESP} \\ \hline
+\texttt{-17} & \reg{EBP} & \texttt{16} & \reg{EBP} \\ \hline
+\texttt{17} & \reg{R0} & & \\ \hline
+\texttt{...} & \reg{...} & & \\ \hline
+\texttt{47} & \reg{R32} & & \\ \hline
+\end{tabular}
+\onehalfspacing
+
+\section{Локальный режим выполнения} \label{localexec}
+Процессор Zyelios CPU поддерживает два формата машинного кода: инструкции переменной длины, и инструкции постоянной длины. Процессора автоматически определяет тип машинного кода для поддержки обратной совместимости. Для этого существует насколько правил.
+
+%Существуют такие локальные режимы выполнения:
+%\singlespacing
+%\begin{longtable}{|c|c|p{3.0in}|} \hline
+%Индекс & Название & Описание \\ \hline
+%\texttt{0} & Обычный режим ZCPU & Инструкции переменной длины )  \\ \hline
+%\texttt{1} & Совместимый режим ZCPU & Same as default mode, but single-opcode instructions must be followed by a zero byte (RM byte)  \\ \hline
+%\texttt{2} & Режим инструкций постоянной длины & Fixed-sized instructions with negative RM \\ \hline
+%\end{longtable}
+%\onehalfspacing
+
+%The current mode is determined by the value of the RM byte. The processor follows this execution flow when decoding an instruction:
+%\begin{enumerate}
+	%\item Read opcode number
+	%\item If opcode does not have operands, fetch next byte. If this byte is zero, then skip it.
+	%\item If opcode does not have operands, fetch next byte. If this byte is positive, then do nothing about it.
+	%\item If opcode does not have operands, fetch next byte. If this byte is negative, then read it as a fixed-size opcode.
+	%\item If opcode has several operands, fetch next byte. If this byte is negative, then read it as a fixed-size opcode.
+	%\item If opcode has several operands, fetch next byte. If this byte is positive, then decode it as variable-sized opcode.
+	%\item If opcode has several operands, fetch next byte. If this byte is zero, then signal internal error.
+%\end{enumerate}
+
+Пример инструкций в обычном режиме:
+\begin{verbatim}
+STEF            48
+INC EAX         20, 1
+MOV EAX,10      14, 1, 10
+ADD EAX,ESP     10, 70001
+DIV EBX,ES:ECX  10013, 290002, 4
+ADD R0,#R2      10, 20822048
+MOV #100,#500   14, 250025, 100, 500
+MOV EAX:#50,GS  1014, 130025, 9, 50
+\end{verbatim}
+
+Пример инструкций в режиме фиксированого размера:
+\begin{verbatim}
+STEF            2048,0,-4,-4,0,0
+INC EAX         2020,1,-4,-4,0,0
+MOV EAX,10      2014,1,-4,-4,0,10
+ADD EAX,ESP     2010,70001,-4,-4,0,0
+DIV EBX,ES:ECX  12013,290002,-4,4,0,0
+ADD R0,#R2      2010,20822048,-4,-4,0,0
+MOV #100,#500   2014,250025,-4,-4,100,500
+MOV EAX:#50,GS  3014,130025,9,-4,50,0
+\end{verbatim}
+
+Пример инструкций в режиме совместимости:
+\begin{verbatim}
+STEF            48, 0
+INC EAX         20, 1
+MOV EAX,10      14, 1, 10
+ADD EAX,ESP     10, 70001
+DIV EBX,ES:ECX  10013, 290002, 4
+ADD R0,#R2      10, 20822048
+MOV #100,#500   14, 250025, 100, 500
+MOV EAX:#50,GS  1014, 130025, 9, 50
+\end{verbatim}

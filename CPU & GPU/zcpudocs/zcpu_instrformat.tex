@@ -1,0 +1,232 @@
+\chapter{Instruction Format} \label{instructionformat}
+\section{Format}
+Each instruction in the ZCPU begins with a single byte which identifies the instruction to be executed. If the instruction has operands, then a \emph{RM byte} (register/memory selector byte) follows. This extra byte specifies what kind of operands are being passed to the instruction.
+
+Instruction number may also encode information about use of segment prefix, or about the local execution mode (see page \pageref{localexec}). The instruction number can fall into one of the following ranges:
+\begin{itemize}
+	\item \reg{000 – 999}: variable size instructions
+	\item \reg{1000 – 1999}: variable size instructions with segment prefix for 1st operand
+	\item \reg{10000 – 10999}: variable size instructions with segment prefix for 2nd operand
+	\item \reg{11000 – 11999}: variable size instructions with segment prefixes for both operands
+	\item \reg{2000 – 2999}: fixed size instructions
+	\item \reg{3000 – 3999}: fixed size instructions with segment prefix for 1st operand
+	\item \reg{12000 – 12999}: fixed size instructions with segment prefix for 2nd operand
+	\item \reg{13000 – 13999}: fixed size instructions with segment prefixes for both operands
+\end{itemize}
+
+The instruction may be followed by several extra bytes that specify segment prefix, constant values, etc. The constant values are always the last bytes in the instruction data. Here's an example of a wide variety of different instructions:
+\begin{verbatim}
+STEF            48
+INC EAX         20, 1
+MOV EAX,10      14, 1, 10
+ADD EAX,ESP     10, 70001
+DIV EBX,ES:ECX  10013, 290002, 4
+ADD R0,#R2      10, 20822048
+MOV #100,#500   14, 250025, 100, 500
+MOV EAX:#50,GS  1014, 130025, 9, 50
+\end{verbatim}
+
+\section{Register-Memory Modifier Byte}
+The RM byte consists of two parts - the RM selector for the first and the second operand: $RM = RM_1 + 10000 \cdot RM_2$.
+
+For example RM bytes from the example in the previous chapter could be decoded like this:
+\begin{verbatim}
+                RM        RM1   RM2
+STEF            n/a       n/a   n/a
+INC EAX         1         1     n/a
+MOV EAX,10      1         1     0
+ADD EAX,ESP     70001     1     7
+DIV EBX,ES:ECX  290002    2     29
+ADD R0,#R2      20822048  2048  2082
+MOV #100,#500   250025    25    25
+MOV EAX:#50,GS  130025    25    13
+\end{verbatim}
+
+These RM selectors are supported right now:
+\singlespacing
+\begin{longtable}{|c|c|p{3.0in}|} \hline
+Selector & Operand & Source/target \\ \hline
+\texttt{0} & \reg{123} & Constant value \\ \hline
+
+\texttt{1} & \reg{EAX} & Register \reg{EAX} \\ \hline
+\texttt{2} & \reg{EBX} & Register \reg{EBX} \\ \hline
+\texttt{3} & \reg{ECX} & Register \reg{ECX} \\ \hline
+\texttt{4} & \reg{EDX} & Register \reg{EDX} \\ \hline
+\texttt{5} & \reg{ESI} & Register \reg{ESI} \\ \hline
+\texttt{6} & \reg{EDI} & Register \reg{EDI} \\ \hline
+\texttt{7} & \reg{ESP} & Register \reg{ESP} \\ \hline
+\texttt{8} & \reg{EBP} & Register \reg{EBP} \\ \hline
+
+\texttt{9} & \reg{CS} & Register \reg{CS} \\ \hline
+\texttt{10} & \reg{SS} & Register \reg{SS} \\ \hline
+\texttt{11} & \reg{DS} & Register \reg{DS} \\ \hline
+\texttt{12} & \reg{ES} & Register \reg{ES} \\ \hline
+\texttt{13} & \reg{GS} & Register \reg{GS} \\ \hline
+\texttt{14} & \reg{FS} & Register \reg{FS} \\ \hline
+\texttt{15} & \reg{KS} & Register \reg{KS} \\ \hline
+\texttt{16} & \reg{LS} & Register \reg{LS} \\ \hline
+
+\texttt{17} & \reg{\char`\#EAX}, \reg{ES:\char`\#EAX} & Memory cell \reg{EAX + segment} \\ \hline
+\texttt{18} & \reg{\char`\#EBX}, \reg{ES:\char`\#EBX} & Memory cell \reg{EBX + segment} \\ \hline
+\texttt{19} & \reg{\char`\#ECX}, \reg{ES:\char`\#ECX} & Memory cell \reg{ECX + segment} \\ \hline
+\texttt{20} & \reg{\char`\#EDX}, \reg{ES:\char`\#EDX} & Memory cell \reg{EDX + segment} \\ \hline
+\texttt{21} & \reg{\char`\#ESI}, \reg{ES:\char`\#ESI} & Memory cell \reg{ESI + segment} \\ \hline
+\texttt{22} & \reg{\char`\#EDI}, \reg{ES:\char`\#EDI} & Memory cell \reg{EDI + segment} \\ \hline
+\texttt{23} & \reg{\char`\#ESP}, \reg{ES:\char`\#ESP} & Memory cell \reg{ESP + segment} \\ \hline
+\texttt{24} & \reg{\char`\#EBP}, \reg{ES:\char`\#EBP} & Memory cell \reg{EBP + segment} \\ \hline
+
+\texttt{25} & \reg{\char`\#123}, \reg{ES:\char`\#123} & Memory cell by constant value \\ \hline
+
+\texttt{26} & \reg{ES:EAX} & Register \reg{EAX + segment} \\ \hline
+\texttt{27} & \reg{ES:EBX} & Register \reg{EBX + segment} \\ \hline
+\texttt{28} & \reg{ES:ECX} & Register \reg{ECX + segment} \\ \hline
+\texttt{29} & \reg{ES:EDX} & Register \reg{EDX + segment} \\ \hline
+\texttt{30} & \reg{ES:ESI} & Register \reg{ESI + segment} \\ \hline
+\texttt{31} & \reg{ES:EDI} & Register \reg{EDI + segment} \\ \hline
+\texttt{32} & \reg{ES:ESP} & Register \reg{ESP + segment} \\ \hline
+\texttt{33} & \reg{ES:EBP} & Register \reg{EBP + segment} \\ \hline
+
+\texttt{34} & No syntax & Memory cell \reg{EAX + constant} \\ \hline
+\texttt{35} & No syntax & Memory cell \reg{EBX + constant} \\ \hline
+\texttt{36} & No syntax & Memory cell \reg{ECX + constant} \\ \hline
+\texttt{37} & No syntax & Memory cell \reg{EDX + constant} \\ \hline
+\texttt{38} & No syntax & Memory cell \reg{ESI + constant} \\ \hline
+\texttt{39} & No syntax & Memory cell \reg{EDI + constant} \\ \hline
+\texttt{40} & No syntax & Memory cell \reg{ESP + constant} \\ \hline
+\texttt{41} & No syntax & Memory cell \reg{EBP + constant} \\ \hline
+
+\texttt{42} & No syntax & Register \reg{EAX + constant} \\ \hline
+\texttt{43} & No syntax & Register \reg{EBX + constant} \\ \hline
+\texttt{44} & No syntax & Register \reg{ECX + constant} \\ \hline
+\texttt{45} & No syntax & Register \reg{EDX + constant} \\ \hline
+\texttt{46} & No syntax & Register \reg{ESI + constant} \\ \hline
+\texttt{47} & No syntax & Register \reg{EDI + constant} \\ \hline
+\texttt{48} & No syntax & Register \reg{ESP + constant} \\ \hline
+\texttt{49} & No syntax & Register \reg{EBP + constant} \\ \hline
+
+\texttt{50} & \reg{ES:123} & Constant value plus segment \\ \hline
+
+\texttt{1000} & \reg{PORT0} & Port 0 \\ \hline
+\texttt{1001} & \reg{PORT1} & Port 1 \\ \hline
+\texttt{....} & \reg{....} & .... \\ \hline
+\texttt{2023} & \reg{PORT1023} & Port 1023 \\ \hline
+
+\texttt{2048} & \reg{R0} & Extended register \reg{R0} \\ \hline
+\texttt{....} & \reg{....} & .... \\ \hline
+\texttt{2079} & \reg{R31} & Extended register \reg{R31} \\ \hline
+
+\texttt{2080} & \reg{\char`\#R0}, \reg{ES:\char`\#R0} & Memory cell \reg{R0 + segment} \\ \hline
+\texttt{....} & \reg{....} & .... \\ \hline
+\texttt{2111} & \reg{\char`\#R31}, \reg{ES:\char`\#R31} & Memory cell \reg{R31 + segment} \\ \hline
+
+\texttt{2112} & \reg{ES:R0} & Extended register \reg{R0 + segment} \\ \hline
+\texttt{....} & \reg{....} & .... \\ \hline
+\texttt{2143} & \reg{ES:R31} & Extended register \reg{R31 + segment} \\ \hline
+
+\texttt{2144} & No syntax & Memory cell \reg{R0 + constant} \\ \hline
+\texttt{....} & \reg{....} & .... \\ \hline
+\texttt{2175} & No syntax & Memory cell \reg{R31 + constant} \\ \hline
+
+\texttt{2176} & No syntax & Extended register \reg{R0 + constant} \\ \hline
+\texttt{....} & \reg{....} & .... \\ \hline
+\texttt{2207} & No syntax & Extended register \reg{R31 + constant} \\ \hline
+\end{longtable}
+\onehalfspacing
+
+\section{Segment Offsets}
+Segment offset is specified by a byte that follows the RM byte. For example, here is how the same instruction is encoded with different segment prefixes:
+\begin{verbatim}
+MOV EAX,EBX        14,20001
+MOV LS:EAX,EBX     1014,20027,8
+MOV EAX,LS:EBX     10014,280001,8
+MOV LS:EAX,LS:EBX  11014,280027,8,8
+MOV R0:EAX,EBX     1014,20027,17
+MOV EAX,R0:EBX     10014,280001,17
+MOV R0:EAX,R0:EBX  11014,280027,17,17
+\end{verbatim}
+
+There can be the following segment prefixes. The negative-value prefixes are obsolete now, and are only preserved for backwards compatibility:
+\singlespacing
+\begin{tabular}{|c|c|c|c|} \hline
+Value & Register & Value & Register\\ \hline
+\texttt{-02} & \reg{CS} & \texttt{01} & \reg{CS}\\ \hline
+\texttt{-03} & \reg{SS} & \texttt{02} & \reg{SS} \\ \hline
+\texttt{-04} & \reg{DS} & \texttt{03} & \reg{DS} \\ \hline
+\texttt{-05} & \reg{ES} & \texttt{04} & \reg{ES} \\ \hline
+\texttt{-06} & \reg{GS} & \texttt{05} & \reg{GS} \\ \hline
+\texttt{-07} & \reg{FS} & \texttt{06} & \reg{FS} \\ \hline
+\texttt{-08} & \reg{KS} & \texttt{07} & \reg{KS} \\ \hline
+\texttt{-09} & \reg{LS} & \texttt{08} & \reg{LS} \\ \hline
+\texttt{-10} & \reg{EAX} & \texttt{09} & \reg{EAX} \\ \hline
+\texttt{-11} & \reg{EBX} & \texttt{10} & \reg{EBX} \\ \hline
+\texttt{-12} & \reg{ECX} & \texttt{11} & \reg{ECX} \\ \hline
+\texttt{-13} & \reg{EDX} & \texttt{12} & \reg{EDX} \\ \hline
+\texttt{-14} & \reg{ESI} & \texttt{13} & \reg{ESI} \\ \hline
+\texttt{-15} & \reg{EDI} & \texttt{14} & \reg{EDI} \\ \hline
+\texttt{-16} & \reg{ESP} & \texttt{15} & \reg{ESP} \\ \hline
+\texttt{-17} & \reg{EBP} & \texttt{16} & \reg{EBP} \\ \hline
+\texttt{17} & \reg{R0} & & \\ \hline
+\texttt{...} & \reg{...} & & \\ \hline
+\texttt{47} & \reg{R32} & & \\ \hline
+\end{tabular}
+\onehalfspacing
+
+\section{Local Execution Mode} \label{localexec}
+The Zyelios CPU supports two machine code formats: fixed-length and variable-length. The CPU automatically determines which type is in use in order to retain binary compatibility. Several simple rules are employed for this detection.
+
+%The following are valid local execution modes:
+%\singlespacing
+%\begin{longtable}{|c|c|p{3.0in}|} \hline
+%Index & Rule & Description \\ \hline
+%\texttt{0} & ZCPU default mode & Variable-sized instructions with integer positive RM byte or no RM byte (zero or negative not allowed)  \\ \hline
+%\texttt{1} & ZCPU compatibility mode & Same as default mode, but single-opcode instructions must be followed by a zero byte (RM byte)  \\ \hline
+%\texttt{2} & Fixed-size instruction mode & Fixed-sized instructions with negative RM \\ \hline
+%\end{longtable}
+%\onehalfspacing
+
+%The current mode is determined by the value of the RM byte. The processor follows this execution flow when decoding an instruction:
+%\begin{enumerate}
+	%\item Read opcode number
+	%\item If opcode does not have operands, fetch next byte. If this byte is zero, then skip it.
+	%\item If opcode does not have operands, fetch next byte. If this byte is positive, then do nothing about it.
+	%\item If opcode does not have operands, fetch next byte. If this byte is negative, then read it as a fixed-size opcode.
+	%\item If opcode has several operands, fetch next byte. If this byte is negative, then read it as a fixed-size opcode.
+	%\item If opcode has several operands, fetch next byte. If this byte is positive, then decode it as variable-sized opcode.
+	%\item If opcode has several operands, fetch next byte. If this byte is zero, then signal internal error.
+%\end{enumerate}
+
+Example of instructions in the default mode:
+\begin{verbatim}
+STEF            48
+INC EAX         20, 1
+MOV EAX,10      14, 1, 10
+ADD EAX,ESP     10, 70001
+DIV EBX,ES:ECX  10013, 290002, 4
+ADD R0,#R2      10, 20822048
+MOV #100,#500   14, 250025, 100, 500
+MOV EAX:#50,GS  1014, 130025, 9, 50
+\end{verbatim}
+
+Example of instructions encoded in fixed-size mode:
+\begin{verbatim}
+STEF            2048,0,-4,-4,0,0
+INC EAX         2020,1,-4,-4,0,0
+MOV EAX,10      2014,1,-4,-4,0,10
+ADD EAX,ESP     2010,70001,-4,-4,0,0
+DIV EBX,ES:ECX  12013,290002,-4,4,0,0
+ADD R0,#R2      2010,20822048,-4,-4,0,0
+MOV #100,#500   2014,250025,-4,-4,100,500
+MOV EAX:#50,GS  3014,130025,9,-4,50,0
+\end{verbatim}
+
+Same instructions in the ZCPU compatibility mode:
+\begin{verbatim}
+STEF            48, 0
+INC EAX         20, 1
+MOV EAX,10      14, 1, 10
+ADD EAX,ESP     10, 70001
+DIV EBX,ES:ECX  10013, 290002, 4
+ADD R0,#R2      10, 20822048
+MOV #100,#500   14, 250025, 100, 500
+MOV EAX:#50,GS  1014, 130025, 9, 50
+\end{verbatim}

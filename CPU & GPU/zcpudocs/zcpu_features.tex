@@ -1,0 +1,758 @@
+\chapter{Processor Features}
+
+\section{Introduction}
+The Zyelios CPU is a virtual processor. It was created so the Wiremod players could include it in their contraptions, automating their contraptions and learning the basics of low-level programming, assembly programming and, with introduction of the HL-ZASM compiler, C programming.
+
+This processor is very similar to the kind of processors all modern complex devices use. Its closest real-world analog is the \texttt{x86} architecture, but it has several major distinctions, the most of which is the use of floating-point numbers instead of integers.
+
+It should be noted that the processor is a complex machine, and just like a real vehicle it will require some practice to master. It should be understood, however, that despite large number of possible uses of the processor it's based on a very simple set of logic rules. Only the complex combination of these basic logic rules creates all the behaviour of the processor.
+
+This handbook should serve as a concise documentation that covers all of the ZCPU features and quirks you might encounter during your programming. Just like a car manual for a real car, this book covers all of the controls and features of the ZCPU. This handbook assumes the reader has some basic knowledge of real-world processors. %If you feel that you don't know enough about the processors, see page \pageref{processorinfo} for more information.
+
+\section{Theory}
+The processor was invented as a logical step up from basic analog computers. First processors were tasked with solving mathematical equations, performing simulations, and processing large arrays of statistic data.
+
+The program that the processor must execute is split into instructions. Each instruction is a simple operation, which somehow alters processor state, or state of any external devices. For example:
+\begin{verbatim}
+MOV R0,100 //Move 100 to R0
+ADD R0,R1 //Add R0 with R1
+\end{verbatim}
+
+The extra parameters specified by a programmer to alter the execution of a specific instruction by the processor are called \emph{operands}. All the instructions in ZCPU have zero, one or two operands. The first operand is usually the \emph{destanation} operand, and the second one is the \emph{source} operand.
+
+If there is some result after execution the instruction, it is written to the first operand:
+\begin{verbatim}
+ADD R0,200; //R0 = R0 + 200
+\end{verbatim}
+
+A \emph{register} is a variable inside the processor. They are divided into \emph{general purpose} registers and the \emph{special} (internal) registers. Programmer may use general purpose registers as temporary or intermediate storage for any sort of numeric data:
+\begin{verbatim}
+MOV R6,100;
+MOV R7,R6;
+\end{verbatim}
+
+The special registers are used to alter the processor execution mode.
+
+The processor may be attached to external devices and external memory via data bus. A \emph{data bus} is a special type of device which allows to connect several other devices together. There are two data buses in ZCPU: the \reg{MemBus} (memory bus), and the \reg{IOBus} (input/output bus). Any memory cell on these buses and in the processors internal memory can be accessed by an \emph{address} - an integer value. There is no principial difference between how the two buses operate, although it is possible to use memory cells located on the \reg{IOBus} in an easy to understand way - by addressing them as ports:
+\begin{verbatim}
+MOV R0,PORT0 //Read cell 0 via I/O bus
+MOV [500],R0 //Write to cell 500 via memory bus
+\end{verbatim}
+
+There are several memory models provided by the ZCPU - these specify how much internal memory the ZCPU has (it may either have some memory and ROM, like a microcontroller, or not use any internal memory at all, similarly to common processors).
+
+\section{General Purpose Registers}
+There are 40 general purpose registers in the ZCPU. They are divided into the \emph{main} and the \emph{extended} set. The registers from the main set are called \reg{EAX}, \reg{EBX}, \reg{ECX}, \reg{EDX}, \reg{ESI}, \reg{EDI}, \reg{ESP} and \reg{EBP} (named similarly to the x86 architecture registers). The registers from the extended set are called \reg{R0}, \reg{R1}, ..., \reg{R31}. 
+
+You can use any of these for any arithmetics purposes (that means they only hold numerical values), apart from the \reg{ESP} register, which is reserved as the stack pointer (see page \pageref{stack} for more information on the processor stack). When programming using C syntax the \reg{EBP} register is also used for storing stack frame pointer, and must not be altered to avoid program crash.
+
+Every register is a single 64-bit floating point value. It can contain any value between $-10^{3000}$ and $10^{3000}$, but the precision in digits is limited to 48 bits. This is a simplification that differs ZCPU from any other real-world processor.
+
+Registers are \emph{a lot faster} than using memory. In the version 10 of the processor 32 more general purpose registers were added to speed up the program execution.
+
+When the CPU is reset, all registers (except for \reg{ESP}) will be set to 0. If the current ZCPU memory model includes RAM space, then \reg{ESP} will be reset to the CPU internal RAM size minus one (e.g. \reg{65535} for 64k memory model).
+
+\section{Execution}
+The Zyelios CPU has a special register called the instruction pointer (\reg{IP}). \reg{IP} points to the currently executed instruction and is incremented every time a new instruction is read.
+
+Instructions can be either variable sized or fixed-sized, depending on the local execution mode (see page \pageref{localexec}), so the \reg{IP} may increment in varying steps. It is possible to set \reg{IP} explictly by using any of the branching opcodes (see page \pageref{branching})
+
+The following is the internal execution flow for fetching and executing an instruction:
+\begin{enumerate}
+	\item Fetch instruction number (so the processor would know what instruction it is going to execute, and how much operands will the instruction have)
+	\item If the instruction has operands, then fetch the RM byte (see \reg{rmbyte}). If the instruction has no operands and the next byte is zero it will be skipped (this behaviour assures that the processor is backwards compatible).
+	\item Processor decodes instruction number and fetches segment prefix bytes (if required, this provides support for segment prefixes. See page \pageref{instructionformat} for more information on the instruction format).
+	\item If RM byte requires an immediate value to follow, it will be fetched too.
+	\item The processor executes the instruction microcode, which somehow alters the processor state (but does not touch the values which are explictly stated in the operation).
+	\item All values that must be written are written back to registers, memory, etc.
+\end{enumerate}
+
+For the purpose of optimization, one or more of these steps might be cached by the processor and omitted from actual execution. See page \pageref{caching} for more information on this behaviour.
+
+The processor will run a specific amount of cycles per second. The amount of cycles required for executing each instruction may vary, and it is counted by the \reg{TMR} register. Most instructions are only 1 cycle long, although internal caching or memory access may consume additional cycles.
+
+See page \pageref{advexecution} more information on the execution process.
+
+\section{Interrupts}
+When a certain exceptional event occurs (external signal, error in arithmetics, memory error, etc), the ZCPU will generate an interrupt. Interrupts are special events which will temporarily "interrupt" or change flow of the program and branch to execute the appropriate interrupt handler code. This means that whenever the ZCPU encounters an interrupt it will remember its current state, store it on the processor stack (see page \pageref{stack}) and change \reg{IP} to the first opcode of the interrupt handler.
+
+In extended mode the processor stores an interrupt table - a table which holds pointers to all interrupt handlers. If extended mode is not enabled, any interrupts called will stop the processor execution.
+
+After the interrupt handler has finished running, it can restore the ZCPU state and the previously executed code will continue executing from where it was interrupted.
+
+For example, if this was the stack state before an interrupt call, and current value of \reg{IP} is 157:
+\begin{verbatim}
+..........
+65304: ...
+65306: 181
+65305: -94
+
+ESP = 65304
+\end{verbatim}
+then the stack state will be altered to this after an interrupt call (and \reg{IP} will be set to interrupt handler entrypoint):
+\begin{verbatim}
+..........
+65304: ...
+65306: 181
+65305: -94
+65304: 0   CS
+65303: 157 IP
+
+ESP = 65302
+\end{verbatim}
+
+Interrupts are very similar to normal calls (see page \pageref{branching}), but instead of using a memory pointer an interrupt number is given. Also unlike the regular calls a special return instruction \reg{IRET} must be used in place of \reg{RET}. Any interrupt can be called using the \reg{INT} instruction. For example:
+\begin{verbatim}
+interrupt_handler:
+  ....
+iret;
+\end{verbatim}
+
+There are two types of interrupts: internal interrupts, and external interrupts. The external interrupts will push the entire ZCPU state (along with the return data internal interrupt would push) to stack before entering the interrupt handler. They can only be triggered via external interrupt pin, or by using the \reg{EXTINT} instruction. The external interrupts require \reg{EXTRET} instruction instead of the \reg{IRET} to restore the processor state.
+
+There are several static interrupts. These interrupts are executed when certain exceptional conditions happen internally. All interrupt numbers less than 32 are reserved by the processor. In addition, interrupts 0 and 1 have special meanings and are handled internally. The user program can only use the interrupts 32..255. See page \pageref{errorcodes} for more information on the error interrupts.
+
+The following table describes all of the reserved interrupt numbers:
+
+\singlespacing
+\begin{longtable}{|c|p{3.5in}|} \hline
+Number & Description \\ \hline
+0 & \emph{Reset} \\ \hline
+1 & \emph{Halt} \\ \hline
+2 & End of program execution \\ \hline
+3 & Division by zero \\ \hline
+4 & Unknown opcode \\ \hline
+5 & Internal processor error \\ \hline
+6 & Stack error (overflow/underflow) \\ \hline
+7 & Memory read/write fault \\ \hline
+8 & MemBus fault \\ \hline
+9 & Write access violation (page protection) \\ \hline
+10 & Port read/write fault \\ \hline
+11 & Page acccess violation (page protection) \\ \hline
+12 & Read access violation (page protection) \\ \hline
+13 & General processor fault \\ \hline
+14 & Execute access violation (page protection) \\ \hline
+15 & Address space violation \\ \hline
+17 & Frame instruction limit (\emph{GPU only}) \\ \hline
+23 & String read error (\emph{GPU only}) \\ \hline
+28 & \emph{Page read access trap} \\ \hline
+29 & \emph{Page write access trap} \\ \hline
+30 & \emph{Page access trap} \\ \hline
+31 & \emph{Debug trap} \\ \hline
+\end{longtable}
+\onehalfspacing
+
+The reset interrupt (0) will reset the processor state, and restart code execution from the top of memory. The halt interrupt (1) will stop execution until the processor is reset externally. The \texttt{int 1} and \texttt{int 0} instructions will work as long as the interrupts are not handled by the software (as long as they are disabled in the interrupt table, or interrupt table is not used):
+\begin{verbatim}
+ INT 1; //Stop execution
+ 
+ INT 0; //Reset the processor
+\end{verbatim}
+
+If extended mode is not enabled, \emph{all the interrupts} will work similarly to the halt interrupt (\texttt{int 1}) when triggered. The error code will be set on the error output.
+
+Interrupt handling can be disabled using the \reg{IF} flag. It is not directly writeable, but it can be changed using the special instructions. \emph{When setting the flag, the value will only become updated after the next instruction}. For example:
+
+\begin{verbatim}
+STI;         //Set interrupt flag
+MOV EAX,123; //IF = 0
+ADD EAX,123; //IF = 1 (flag updated)
+CLI;         //Clear interrupt flag
+SUB EAX,123; //IF = 0 (flag clear on this instruction)
+RET;         //IF = 0 
+\end{verbatim}
+
+This assures that for example in this situation the interrupt will not occur between the \texttt{RET} and the \texttt{STI}:
+
+\begin{verbatim}
+ContextSwitch:
+  CLI;
+  
+  ... thread switcher code ...
+  
+  STI;  //An interrupt will never occur between this
+EXTRET; //STI instruction and the NMIRET
+\end{verbatim}
+
+For information on using the interrupt table, consult the advanced interrupts chapter (see page \pageref{advancedinterrupts}).
+
+\section{Memory Segmenting and Segment Registers} \label{segments}
+There are 8 segment registers in the ZCPU. They are \reg{CS}, \reg{SS}, \reg{DS}, \reg{ES}, \reg{GS}, \reg{FS}, \reg{KS} and \reg{LS}. They are used by the ZCPU to support certain memory models. Additionally any of the 40 general purpose registers can be used as segment registers.
+
+Every segment register can contain a 48-bit integer. This value can be used for specifying an offset for a pointer to memory. The ZCPU always uses segments when referencing memory: it translates the local address (the memory address explictly written by the user, it's important to remember that any variable or label has a certain memory address) into the absolute address (the physical address, which serves as a command to direct ZCPU towards where the real data is located).
+
+The formula used for the address translation is:
+\[AbsoluteAddress = LocalAddress + SegmentOffset\]
+
+The user can specify which register to use for offsets by prefixing the operand with the segment name followed by a semicolon. If a segment is not specified, \reg{DS} is used.
+
+Both segment and general purpose registers can be used for segment prefixing. It is not possible to use a constant value for segment prefix. Here is an example of various ZASM syntax for reading memory:
+\begin{verbatim}
+MOV EAX,#EBX      //Address: DS+EBX
+MOV EAX,ES:#EBX   //Address: ES+EBX
+MOV EAX,[EBX]     //Address: DS+EBX
+MOV EAX,[ES:EBX]  //Address: ES+EBX
+MOV EAX,[ES+EBX]  //Address: ES+EBX
+
+MOV EAX,EBX:ECX   //Address: EBX+ECX
+MOV EAX,[EBX+ECX] //Address: EBX+ECX
+MOV EAX,[EBX:100] //Address: EBX+100
+MOV EAX,[100:EBX] //This is not valid
+\end{verbatim}
+
+With some clever programming the segment prefixes can be used for quick array access, typically by using the prefix as the array pointer and the base as the index into the array:
+\begin{verbatim}
+MOV ES,ArrayStart
+MOV EAX,ES:#0 //EAX = 10
+MOV EBX,ES:#2 //EBX = 30
+MOV ECX,ES:#1 //ECX = 50
+
+MOV EAX,0
+MOV EBX,EAX:#ArrayStart //EBX = 10
+INC EAX
+MOV EBX,EAX:#ArrayStart //EBX = 50
+INC EAX
+MOV EBX,EAX:#ArrayStart //EBX = 30
+
+ArrayStart: db 10,50,30
+\end{verbatim}
+
+Some of the segment registers are used by the processor for specific tasks, as per the following table:
+
+\singlespacing
+\begin{longtable}{|c|c|p{3.0in}|} \hline
+Register & Name & Description \\ \hline
+\texttt{CS} & Code segment    & Processor fetches code from this segment \\ \hline
+\texttt{SS} & Data segment    & Default segment for data \\ \hline
+\texttt{DS} & Stack segment   & Processor stack is located in this segment \\ \hline
+\texttt{ES} & Extra segment   & User segment \\ \hline
+\texttt{GS} & G segment       & User segment \\ \hline
+\texttt{FS} & F segment       & User segment \\ \hline
+\texttt{KS} & Key segment     & User segment \\ \hline
+\texttt{LS} & Library segment & User segment \\ \hline
+\end{longtable}
+\onehalfspacing
+
+All segment registers other than \reg{CS} can be directly set by using the \reg{MOV} operation. The only way to modify the \reg{CS} is to execute \reg{CALLF} or \reg{JMPF} instructions (see page \pageref{branching} for more information):
+\begin{verbatim}
+//CS = 0
+//IP = 928
+
+JMPF 500,100;
+
+//CS = 100
+//IP = 500
+\end{verbatim}
+
+Attempting to set \reg{CS} directly will trigger interrupt \reg{13:1} (general processor fault). For example:
+\begin{verbatim}
+MOV DS,100
+MOV ES,KS
+MOV CS,1000 //Will generate interrupt 13:1
+\end{verbatim}
+
+After CPU reset all segment registers will be initialized to \reg{0}.
+
+\section{Memory Models}
+The ZCPU is capable of working in several different memory modes. Linear addressing mode is the default mode, and it is the mode in use when the CPU is reset.
+
+Different modes require different use of registers and provide different execution features. Each mode will usually require extended processor mode to be active, enabling some advanced memory protection features such as page permissions and memory mapping.
+
+It is important to be aware of how memory access actually works. When a memory request occurs (read or write) these are the actions that will be undertaken by the CPU:
+
+\begin{enumerate}
+	\item Check \texttt{BusLock} register. If this register is set to 1 the request will fail.
+	\item Validate the address. The address must be a 48-bit integer value.
+	\item Fetch page that corresponds to the requested address.
+	\item If \texttt{EF} flag is set check if current runlevel is less or equal to target page runlevel and check if it's possible to read/write on the page.
+	\item If page has \texttt{Mapped} flag set then change the address accordingly.
+	\item Perform the I/O operation.
+\end{enumerate}
+
+\subsection{Linear Address Mode}
+This is the default address mode when all segment registers are initialized to \reg{0}. This mode is available after the initial processor startup. Since all registers are set to zero, in this mode the code, data and stack are all located in same address space. 
+
+No segment prefixes are required in this mode. For example you can access the processor stack without specifying the \reg{SS} prefix:
+
+\begin{verbatim}
+MOV EAX,#0  //EAX will be equal to 14 (MOV opcode no)
+MOV #ESP,100 //Same as PUSH 100
+DEC ESP
+POP EAX     //EAX will be equal to 100
+\end{verbatim}
+
+\subsection{Segmented Address Mode}
+This is the most common addressing mode when segment registers are used differently. For example, the code, data and stack might all be located in different areas of memory. This has certain benefits:
+
+\begin{itemize}
+  \item Allows to prevent accidental data/code corruption
+  \item Same code can be used for different blocks of data
+  \item Programs can run in local address space, not aware of different programs (for example BIOS)
+\end{itemize}
+
+Example:
+\begin{verbatim}
+MOV DS,1000 //Set first data block
+MOV SS,2000 //Set first stack block
+CALLF 0,500 //Call the routine (CS will be set to 500, IP to 0)
+
+MOV DS,3000 //Set second data block
+MOV SS,4000 //Set second stack block
+CALLF 0,500 //Call the same routine, but now
+            //working on different data block
+\end{verbatim}
+
+This will run the same routine (located at physical offset \reg{500}) on two different sets of data. Thus the same subprogram can be reused for different sets of variables.
+
+\subsection{Mapped Memory Mode}
+Mapped memory mode uses the memory mapping features of the processor to reroute memory addresses in order to create the appearance of a single continuous address space for the user program. This mode allows user programs to dynamically allocate blocks of data, which can themselves be physically located in different areas of memory. This also allows use of dynamic libraries, where single library loaded once can be used in many programs while remaining in a single place in physical memory.
+
+See page \pageref{paging} for more information.
+
+\section{Stack} \label{stack}
+The Zyelios CPU has a built-in hardware processor stack. Stack operation is controlled by the current stack pointer register (\reg{ESP}), the stack size register (\reg{ESZ}) and the stack segment register (\reg{SS}) Stack data is located in physical RAM.
+
+\reg{ESP} points to the \emph{next free value on the stack}. The stack grows \emph{down}.
+
+\reg{PUSH} and \reg{POP} are used to push or pop values to or from the stack, respectively. Stack overflow or underflow is indicated by the interrupt \reg{6:ESP} (stack error). The interrupt parameter will be set to the value of \reg{ESP}. For example:
+
+\begin{verbatim}
+MOV SS,5000   //Stack starts at offset 5000
+MOV ESP,2999  //Stack is 3000 bytes in size
+              //Next free offset in segment is 2999
+CPUSET 9,3000 //Set ESZ register
+
+PUSH 200
+PUSH 100
+POP EAX //EAX = 100
+POP EBX //EBX = 200
+
+//PUSH X is same as the following (but with error checks):
+MOV SS:#ESP,X
+DEC ESP
+
+//POP Y is same as the following (but with error checks):
+INC ESP
+MOV Y,SS:#ESP
+\end{verbatim}
+
+Additionally, the \reg{RSTACK} and \reg{SSTACK} instructions allow the user to read or write an arbitrary position on the stack. These instructions may also trigger stack underflow or overflow interrupts. The following example illustrates the use of \reg{RSTACK} and \reg{SSTACK}:
+
+\begin{verbatim}
+RSTACK X,Y //X = MEMORY[SS+Y]
+SSTACK X,Y //MEMORY[SS+X] = Y
+
+RSTACK EAX,ESP:1 //Read stack top
+RSTACK EAX,ESP:2 //Read value under stack top
+
+PUSH 100 //
+PUSH 200 //Value under top value
+PUSH 300 //Value on top
+
+SSTACK ESP:2,123 //Set value under stack top
+POP EAX //EAX = 300
+POP EBX //EBX = 123
+POP ECX //ECX = 100
+\end{verbatim}
+
+\section{Branching} \label{branching}
+The Zyelios CPU supports various kinds of branching: conditional or unconditional, absolute or relative. The instruction pointer (\reg{IP}) points to the currently executing instruction. All branching instructions modify \reg{IP}; some also modify \reg{CS} (see page \pageref{segments}).
+
+The simpliest type of branching is absolute unconditional. To perform an unconditional jump, \reg{JMP} or \reg{JMPF} are used (the latter also modifies \reg{CS}).
+
+Program subroutines can be called by using \reg{CALL} or \reg{CALLF}. This will save current the instruction pointer (and \reg{CS} when \reg{CALLF} is used) to the processor stack. The instruction pointer (and code segment if required) can be restored from the stack by using \reg{RET} or \reg{RETF} accordingly.
+
+The following example illustrates creating routines and jumping:
+
+\begin{verbatim}
+JMPF MAIN,CODE_SEGMENT //Syntax is JMPF IP,CS
+
+......
+
+MAIN: //A label
+  CALL SUBROUTINE
+  JMP EXIT
+
+SUBROUTINE:
+  CALL SUBROUTINE2
+RET //Exit subroutine
+
+SUBROUTINE2: //Called inside SUBROUTINE
+  ... do something ...
+RET
+......
+
+EXIT:
+\end{verbatim}
+
+It is possible to perform a relative jump. To do this, \reg{JMPR} (jump relative) is used. This instruction adds or subtracts \reg{IP} by a certain amount instead of giving a specific number. For example example:
+
+\begin{verbatim}
+JMPR +10 //Jump 10 bytes forward
+JMPR -10 //Jump 10 bytes backward
+
+JMPR LABEL-__PTR__ //Jump to label
+                   //__PTR__ label always points
+                   //to current write pointer
+
+......
+
+LABEL:
+\end{verbatim}
+
+Conditional branching allows program flow to be changed depending on certain conditions. \reg{CMP} is used to compare two values, and instructions from the following table react accordingly:
+
+\singlespacing
+\begin{longtable}{|c|c|p{3.0in}|} \hline
+Instruction & Operation & Description \\ \hline
+\texttt{JNE}   & X <> Y     & Jump if not equal \\ \hline
+\texttt{JNZ}   & X - Y <> 0 & Jump if not zero \\ \hline
+\texttt{JG}    & X > Y      & Jump if greater than \\ \hline
+\texttt{JNLE}  & NOT X <= Y & Jump if not less or equal \\ \hline
+\texttt{JGE}   & X >= Y     & Jump if greater or equal \\ \hline
+\texttt{JNL}   & NOT X < Y  & Jump if not less than\\ \hline
+\texttt{JL}    & X < Y      & Jump if less than \\ \hline
+\texttt{JNGE}  & NOT X >= Y & Jump if not greater or equal \\ \hline
+\texttt{JLE}   & X <= Y     & Jump if less or equal\\ \hline
+\texttt{JNG}   & NOT X > Y  & Jump if not greater than \\ \hline
+\texttt{JE}    & X = Y      & Jump if equal \\ \hline
+\texttt{JZ}    & X - Y = 0  & Jump if zero \\ \hline
+
+\texttt{CNE}   & X <> Y     & Call if not equal \\ \hline
+\texttt{CNZ}   & X - Y <> 0 & Call if not zero \\ \hline
+\texttt{CG}    & X > Y      & Call if greater than \\ \hline
+\texttt{CNLE}  & NOT X <= Y & Call if not less or equal \\ \hline
+\texttt{CGE}   & X >= Y     & Call if greater or equal \\ \hline
+\texttt{CNL}   & NOT X < Y  & Call if not less than\\ \hline
+\texttt{CL}    & X < Y      & Call if less than \\ \hline
+\texttt{CNGE}  & NOT X >= Y & Call if not greater or equal \\ \hline
+\texttt{CLE}   & X <= Y     & Call if less or equal\\ \hline
+\texttt{CNG}   & NOT X > Y  & Call if not greater than \\ \hline
+\texttt{CE}    & X = Y      & Call if equal \\ \hline
+\texttt{CZ}    & X - Y = 0  & Call if zero \\ \hline
+
+\texttt{JNER}   & X <> Y     & Jump relative if not equal \\ \hline
+\texttt{JNZR}   & X - Y <> 0 & Jump relative if not zero \\ \hline
+\texttt{JGR}    & X > Y      & Jump relative if greater than \\ \hline
+\texttt{JNLER}  & NOT X <= Y & Jump relative if not less or equal \\ \hline
+\texttt{JGER}   & X >= Y     & Jump relative if greater or equal \\ \hline
+\texttt{JNLR}   & NOT X < Y  & Jump relative if not less than\\ \hline
+\texttt{JLR}    & X < Y      & Jump relative if less than \\ \hline
+\texttt{JNGER}  & NOT X >= Y & Jump relative if not greater or equal \\ \hline
+\texttt{JLER}   & X <= Y     & Jump relative if less or equal\\ \hline
+\texttt{JNGR}   & NOT X > Y  & Jump relative if not greater than \\ \hline
+\texttt{JER}    & X = Y      & Jump relative if equal \\ \hline
+\texttt{JZR}    & X - Y = 0  & Jump relative if zero \\ \hline
+
+\end{longtable}
+\onehalfspacing
+
+There are other instruction which perform branch testing, such as \reg{BIT}, which tests specific bits of a given value. For example: \label{branchbit}
+
+\begin{verbatim}
+CMP EAX,EBX
+JG  LABEL1 //Jump if EAX >  EBX
+JLE LABEL2 //Jump if EAX <= EBX
+JE  LABEL3 //Jump if EAX  = EBX
+CL  LABEL4 //Call if EAX <  EBX
+CGE LABEL5 //Call if EAX >= EBX
+
+BIT EAX,4 //Test 5th bit of EAX
+JZ  LABEL1 //Jump if 5th bit is 0
+JNZ LABEL1 //Jump if 5th bit is 1
+\end{verbatim}
+
+\section{Processor Error Codes}\label{errorcodes}
+There are several error codes that might be generated during program execution. Each error condition generates an interrupt.
+
+If processor is not in extended mode, code execution will halt when the error is generated. Upon encountering an error, the processor will halt and output the error code to \reg{ERROR} processor output. It will also emit a secondary error code in the fraction part of the \reg{ERROR} processor output. If the processor is in extended mode, the corresponding interrupt will be called instead.
+
+For example, a typical output might be \texttt{7.65536}, which would indicate a memory read/write fault at address 65536.
+
+The error code will be reset to zero when the CPU is reset. The following are error codes are defined by the current version of the processor:
+
+\singlespacing
+\begin{longtable}{|c|c|p{3.0in}|} \hline
+Code & Description \\ \hline
+\texttt{02} & End of program execution \\ \hline
+\texttt{03} & Division by zero \\ \hline
+\texttt{04} & Unknown opcode \\ \hline
+\texttt{05} & Internal processor error \\ \hline
+\texttt{06} & Stack error (overflow/underflow) \\ \hline
+\texttt{07} & Memory read/write fault \\ \hline
+\texttt{08} & MemBus fault \\ \hline
+\texttt{09} & Write access violation (page protection) \\ \hline
+\texttt{10} & Port read/write fault \\ \hline
+\texttt{11} & Page acccess violation (page protection) \\ \hline
+\texttt{12} & Read access violation (page protection) \\ \hline
+\texttt{13} & General processor fault \\ \hline
+\texttt{14} & Execute access violation (page protection) \\ \hline
+\texttt{15} & Address space violation \\ \hline
+
+\end{longtable}
+\onehalfspacing
+
+\newcommand{\errorentry}[4]{
+
+\textbf{Error message}: #1 \\ \textbf{Occurs when}: #2 \\ \textbf{Cause}: #3 \\ \textbf{Result}: #4
+
+\vspace{0.1in}
+
+}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{End of program execution (02)}
+\errorentry{STOP detected}
+           {\reg{STOP}/\reg{OPCODE 0} is executed}
+           {Abnomal program end}
+           {None}
+\errorentry{Invalid opcode}
+           {Any of the branching instructions is executed (\reg{JMP}, \reg{CALL}, etc)}
+           {Jumping by offset that does not point to valid ZCPU instruction}
+           {None}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Division By Zero (03)}
+\errorentry{Unable to divide by zero}
+           {Second operand for \reg{DIV} opcode is zero}
+           {User error}
+           {\reg{LADD = 1}}
+\errorentry{Unable to perform inversion on a zero}
+           {Calling \reg{FINV} opcode with zero operand}
+           {User error}
+           {\reg{LADD = 2}}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Unknown Opcode (04)}
+\errorentry{Unknown opcode detected in the instruction stream}
+           {Next executed instruction is not one of the recognized instructions}
+           {Invalid branching operation is performed (processor attempts to execute data)}
+           {\reg{LADD = OPCODE NUMBER}}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Internal Processor Error (05)}
+\errorentry{Unable to execute instruction (microcode error)}
+           {An internal error has ocurred while executing microcode}
+           {Encountering a bug in processor}
+           {\reg{LADD = 01}}
+\errorentry{Unknown internal error}
+           {Never}
+           {None}
+           {\reg{LADD = 02}}
+\errorentry{Read error while fetching the instruction}
+           {Instruction decoder was not able to fetch all of the instruction bytes}
+           {\reg{JMP} or \reg{CALL} to a memory location outside of physical/logical range}
+           {\reg{LADD = 12}}
+\errorentry{Could not fetch an immediate byte for operand 1}
+           {Instruction decoder was not able to fetch an immediate byte for the first operand}
+           {\reg{JMP} or \reg{CALL} to a memory location outside of physical/logical range}
+           {\reg{LADD = 22}}
+\errorentry{Could not fetch an immediate byte for operand 2}
+           {Instruction decoder was not able to fetch an immediate byte for the second operand}
+           {\reg{JMP} or \reg{CALL} to a memory location outside of physical/logical range}
+           {\reg{LADD = 32}}
+\errorentry{Invalid RM parameter for operand 1}
+           {Never}
+           {None}
+           {\reg{LADD = 42}}
+\errorentry{Invalid RM parameter for operand 2}
+           {Never}
+           {None}
+           {\reg{LADD = 52}}
+\errorentry{Target operand not writeable}
+           {Never}
+           {None}
+           {\reg{LADD = 62}}
+\errorentry{Source operand not writeable (\texttt{XCHG} instruction only)}
+           {Never}
+           {None}
+           {\reg{LADD = 72}}
+\errorentry{Unknown opcode}
+           {Never}
+           {None}
+           {\reg{LADD = 82}}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Stack Error (06)}
+\errorentry{Stack overflow error}
+           {\reg{PUSH} is executed}
+           {\reg{ESP} register value becomes negative}
+           {\reg{LADD = 0}}
+\errorentry{Stack underflow error}
+           {\reg{POP} is executed}
+           {\reg{ESP} register is greater than \reg{ESZ}}
+           {\reg{LADD = ESZ}}
+\errorentry{Stack read error}
+           {\reg{POP} is executed}
+           {Unable to read value from memory}
+           {\reg{LADD = ESP}}           
+\errorentry{Stack out of bounds error}
+           {\reg{RSTACK} or \reg{SSTACK} is executed}
+           {Requested value out of stack bounds}
+           {\reg{LADD} equals to requested index on stack}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Memory Read/Write Fault (07)}
+\errorentry{Read error: address does not exist}
+           {Processor attempts to read a value from outside of the internal RAM}
+           {No device is attached to the MemBus}
+           {\reg{LADD} equals to faulty address in memory}
+\errorentry{Read error: unable to read memory location}
+           {Processor attempts to read a value from outside of the internal RAM}
+           {A failure has occured while attempting to read a value (value out of the device address range)}
+           {\reg{LADD} equals to faulty address in memory}
+\errorentry{Write error: address does not exist}
+           {Processor attempts to write a value to outside of the internal RAM}
+           {No device is attached to the MemBus}
+           {\reg{LADD} equals to faulty address in memory}
+\errorentry{Write error: unable to write to memory location}
+           {Processor attempts to write a value to outside of the internal RAM}
+           {A failure has occured while attempting to write a value (value out of the device address range)}
+           {\reg{LADD} equals to faulty address in memory}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{MemBus Fault (08)}
+\errorentry{MemBus device error}
+           {Processor attempts to read a value from outside of the internal RAM}
+           {Device currently attached to MemBus does not support hispeed interface}
+           {\reg{LADD} equals to faulty address in memory}
+\errorentry{IOBus device error}
+           {Processor attempts to read a value from a port}
+           {Device currently attached to IOBus does not support hispeed interface}
+           {\reg{LADD = -PORT\textunderscore NUMBER}}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Write Access Violation (09)}
+\errorentry{Access violation}
+           {Attempting to write a value}
+           {\reg{EF} flag set to 1, no write permission on referenced page, and referenced by the address has a smaller runlevel than the current one.}
+           {\reg{LADD} equals to faulty address in memory}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Port Read/Write Fault (10)}
+\errorentry{Read error: unable to read a port}
+           {Processor attempts to read a value from a port}
+           {A failure has occured while attempting to read a value (value out of he device address range)}
+           {\reg{LADD} equals to faulty address in memory}
+\errorentry{Write error: unable to write to a port}
+           {Processor attempts to write a value to a port}
+           {A failure has occured while attempting to write a value (value out of the device address range)}
+           {\reg{LADD} equals to faulty address in memory}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Page acccess violation (11)}
+\errorentry{Unable to set page readonly}
+           {\reg{SPG} opcode is executed}
+           {Current runlevel greater than runlevel of the refernced page}
+           {\reg{LADD} points to referenced page}
+\errorentry{Unable to set page read- and writeable}
+           {\reg{CPG} opcode is executed}
+           {Current runlevel greater than runlevel of the refernced page}
+           {\reg{LADD} points to referenced page}
+\errorentry{Unable to set page flag}
+           {\reg{SPP} opcode is executed}
+           {Current runlevel greater than runlevel of the refernced page}
+           {\reg{LADD} points to referenced page}
+\errorentry{Unable to clear page flag}
+           {\reg{CPP} opcode is executed}
+           {Current runlevel greater than runlevel of the refernced page}
+           {\reg{LADD} points to referenced page}
+\errorentry{Unable to set page runlevel}
+           {\reg{SRL} opcode is executed}
+           {Current runlevel greater than runlevel of the refernced page}
+           {\reg{LADD} points to referenced page}
+\errorentry{Unable to set page mapping}
+           {\reg{SMAP} opcode is executed}
+           {Current runlevel greater than runlevel of the refernced page}
+           {\reg{LADD} points to referenced page}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Read access violation (12)}
+\errorentry{Access violation}
+           {Attempting to read a value}
+           {\reg{EF} flag set to 1, no read permission on referenced page, and referenced by the address has a smaller runlevel than the current one.}
+           {\reg{LADD} equals to faulty address in memory}
+\errorentry{Referenced page outside ROM}
+           {\reg{ERPG} opcode executed}
+           {Page referenced by the instruction could not be erased, because it lies outside the processor ROM}
+           {\reg{LADD = 0}}
+\errorentry{Referenced page outside ROM}
+           {\reg{WRPG} opcode executed}
+           {Page referenced by the instruction could not be written, because it lies outside the processor ROM}
+           {\reg{LADD = 0}}
+\errorentry{Referenced page outside ROM}
+           {\reg{RDPG} opcode executed}
+           {Page referenced by the instruction could not be read, because it lies outside the processor ROM}
+           {\reg{LADD = 0}}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{General Processor Fault (13)}
+\errorentry{Code segment write violation}
+           {\reg{CS} value is being used as a target operand}
+           {An attempt is being made to set a read-only segment register. Use \texttt{CALLF} or \texttt{JMPF} instructions to modify the CS register}
+           {\reg{LADD = 1}}
+\errorentry{Unable to read interrupt table}
+           {Could not fetch entry from interrupt table}
+           {Invalid interrupt table location set with \reg{LIDTR}}
+           {\reg{LADD = 2}}
+\errorentry{Invalid interrupt number}
+           {Interrupt outside of the acceptable boundary (0..255) is called}
+           {Misuse of the \reg{INT} or the \reg{EXTINT} instructions}
+           {\reg{LADD = 3}}
+\errorentry{Unprivileged external interrupt call}
+           {External interrupt was called while the appropriate flag was not set in the interrupt table}
+           {\reg{6th} bit not set for the external interrupt in the interrupt table, and the external interrupt is called}
+           {\reg{LADD = 4}}
+\errorentry{Incompatible mode}
+           {Interrupt call in protected (compatibility) mode with less than 512 bytes of RAM}
+           {Not enough RAM to contain a complete interrupt table}
+           {\reg{LADD = 5}} 
+\errorentry{Unable to push return data}
+           {Interrupt handler was unable to push return data onto the processor stack}
+           {Interrupt was called with no stack space available}
+           {\reg{LADD = 6}}
+\errorentry{Unable to call an interrupt}
+           {Interrupt is called without sufficient rights}
+           {Interrupt is called without sufficient rights to complete the jump}
+           {\reg{LADD = 7}}
+\errorentry{Unable to read page table}
+           {Page table is not located in valid memory range}
+           {Page table is not located in valid memory range}
+           {\reg{LADD = 8}}
+\errorentry{Attempting to execute a privileged instruction}
+           {Could not execute a privileged instruction due to runlevel}
+           {Calling one of the following instructios without sufficient rights: \reg{RD}, \reg{WD}, \reg{SPG}, \reg{CPG}, \reg{STI}, \reg{CLI}, \reg{STP}, \reg{CLP}, \reg{STEF}, \reg{CLEF}, \reg{EXTINT}, \reg{ERPG}, \reg{WRPG}, \reg{RDPG}, \reg{LIDTR}, \reg{EXTRET}, \reg{IDLE}, \reg{STD2}, \reg{STM}, \reg{CLM}, \reg{CPUGET}, \reg{CPUSET}, \reg{CPP}, \reg{SPP}, \reg{SRL}, \reg{GRL}, \reg{SMAP}, \reg{GMAP}
+}
+           {\reg{LADD = Opcode number}}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Execute Access Violation (14)}
+\errorentry{Access violation}
+           {Execution is attempted on a memory page that does not allow execution}
+           {Invalid branching into the protected memory areas}
+           {\reg{LADD = Page number}}
+\errorentry{Access violation}
+           {Execution is attempted on a memory page that does not allow execution}
+           {Code execution has entered page that does not allow execution}
+           {\reg{LADD = Page number}}          
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Address space violation (15)}
+\errorentry{Address space violation}
+           {Memory is accessed by an invalid address}
+           {Address is not a 48-bit signed integer}
+           {\reg{LADD = Referenced invalid address}}

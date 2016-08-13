@@ -1,0 +1,1628 @@
+\chapter{Zyelios GPU}
+\section{General Information}
+\subsection{Basics}
+ZGPU is a vector graphics processor, which runs a certain set of instructions to display an image on screen. It has two basic modes of operation - frame-based mode, in which the processor core will execute a certain subprogram each time the new frame must be drawn to screen, and asynchonous mode, which allows to run ZGPU instructions without being tied to screen refreshes.
+
+Even thought ZGPU works with vector graphics the final result is being rasterized into one of two buffers. These two buffers are called the \emph{front} buffer, and the \emph{texture} buffer. Both buffers are 512x512 pixels in size, and can be used by the programmer. There is support for a natively vertex mode for drawing graphics, but it has certain limitations.
+
+By default the ZGPU runs the frame-based mode, which makes use of the \emph{front} buffer to store data, which will then\subsection{Memory Layout}be displayed on screen. When running in asynchonous mode the graphics are drawn to one of the two buffers, and are then being output to screen.
+
+\subsection{Features}
+Most of the features in the ZGPU are controlled via internal registers (see \pageref{gpuregs} for a complete list of all the registers). They are located in the register memory, which starts at addesses 63488 and ends at 65535.
+
+The memory area between addresses 65536 and 131071 (inclusive) is reserved as an additional external memory bus. It is very slow, but it allows GPU to communicate with other devices. If several GPU's are running at the same time, the access to these memory areas will be concurrent, and so additional synchronization is required to prevent race conditions or collisions of any sort.
+
+The simpliest program GPU can execute is the following (it makes use of the frame-based mode of execution):
+\begin{verbatim}
+dtest; //Output test pattern to screen
+dexit; //Finish execution
+\end{verbatim}
+
+It's possible to setup asynchonous rendering instead of frame-based rendering:
+\begin{verbatim}
+//Setup entrypoints
+dentrypoint 0,DrawThread; 
+dentrypoint 4,AsyncThread;
+
+//Disable hardware clear so drawing thread does not wipe
+//the image on screen
+mov #regHWClear,0;
+//Set asynchronous thread frequency (speed)
+mov #regAsyncFreq,200000;
+//Run the thread
+mov #regAsyncClk,1; 
+dexit;
+
+DrawThread: //Do nothing
+dexit;
+
+AsyncThread:
+  dbegin;
+    dtest;
+  dend;
+  
+  dvsync; //Add frame synchonization
+jmp AsyncThread;
+\end{verbatim}
+
+ZGPU makes use of the vector extension (see page \pageref{vectorext}) which allows it to work with matrices and vectors:
+\begin{verbatim}
+//Generate rotation, translation matrices
+mrotate mRotateMatrix,vRotate;
+mtranslate mTranslateMatrix,vTranslate;
+
+//Create model matrix
+mmov mModelMatrix,mRotateMatrix;
+mmul mModelMatrix,mTranslateMatrix;
+\end{verbatim}
+
+The ZGPU supports 2D and 3D graphics , which must be drawn as polygons:
+\begin{verbatim}
+dvxdata_2f polydata,4; //4 vertices
+dvxdata_3f cubedata,12; //12 triangles
+
+....
+
+polydata:
+db  0,  0;
+db 10,  0;
+db 10, 10;
+db  0, 10;
+
+cubedata:
+db -1,-1,-1; //Triangle 1
+db  1,-1,-1;
+db  1, 1,-1;
+
+db -1,-1,-1; //Triangle 2
+db  1, 1,-1;
+db -1, 1,-1;
+
+...
+\end{verbatim}
+
+Polygons can be drawn in both normal mode, and indexed mode. They can also be drawn solid-colored, textured, or wireframe:
+\begin{verbatim}
+//Load array of vertices
+mov #regVertexArray,cube_varray; 
+dvxdata_3f cube_idxarray,12; //Draw all faces
+dvxdata_3f_wf cube_idxarray,6; //Draw faces 1-3 as wireframe
+
+//Load array of vertices with texture coords
+mov #regVertexArray,cube_varray_tex; 
+dvxdata_3f_tex cube_idxarray,12; //Draw all faces, textured
+
+cube_varray:
+  db -1,-1,-1; //0
+  db -1,-1, 1; //1
+  db -1, 1,-1; //2
+  db -1, 1, 1; //3
+  db  1,-1,-1; //4
+  db  1,-1, 1; //5
+  db  1, 1,-1; //6
+  db  1, 1, 1; //7
+  
+cube_idx:
+  db 0,4,6;  db 0,6,2; //Face 1
+  db 5,1,7;  db 1,3,7; //Face 2
+  db 4,0,5;  db 0,1,5; //Face 3
+  db 2,6,7;  db 3,2,7; //Face 4
+  db 0,2,3;  db 1,0,3; //Face 5
+  db 6,4,7;  db 4,5,7; //Face 6
+\end{verbatim}
+
+It supports vertex buffer, which serves as temporary storage for 2D/3D data before it's rendered on screen. This allows to provide depth-sorting within the buffer, and other features:
+\begin{verbatim}
+//Enable vertex buffer features
+denable 0; //Vertex buffer
+denable 1; //ZSorting
+denable 2; //Lighting
+
+//Add commands to vertex buffer
+dcolor cube_color;
+dvxdata_3f cube_data,12;
+
+//Flush vertex buffer
+dvxflush;
+
+//Disable vertex buffer and its features
+ddisable 0;
+\end{verbatim}
+
+There is support for texturing using both custom textures, and textures available externally:
+\begin{verbatim}
+mov #regVertexMode,1; //Enable vertex mode
+mov #regTexSize,128; //Texture size
+denable 5; //Enable custom texture mapping
+dcolor white; //Set color to white
+
+dtexture 2; //Pick texture #2
+drectwh rect_pos,rect_size;
+
+...
+ddisable 5; //Disable custom texture mapping
+
+dxtexture texture_name; //Pick texture
+drectwh rect_pos,rect_size;
+
+....
+string texture_name,"brick/brickfloor001a";
+\end{verbatim}
+
+ZGPU supports various 2D transformations to move shapes on screen:
+\begin{verbatim}
+dmove target_pos; //move to position
+drotatescale 1.23,2; //Rotate by 1.23 radians, and scale up twice
+drect rect_pos1,rect_pos2; //Draw rectangle around 0,0 point
+
+....
+vector2f target_pos,256,256; //Screen center
+
+vector2f rect_pos1,-50,-50; //Two endpoints for rectangle
+vector2f rect_pos2, 50, 50;
+\end{verbatim}
+
+There is also support for performing similar transformations on the textures, independantly of the previous transformations (rotation is performed around texture centerpoint usually):
+\begin{verbatim}
+denable 5; //Enable custom texturing
+mov #regTexRotation,1.23; //Rotate texture by 1.23 radians
+mov #regTexOffsetV,0.2; //Offset V coordinates by 0.2
+dvxtexpoly horizon_polygon,4;
+\end{verbatim}
+
+
+
+
+\section{Features Reference}
+\subsection{Basic Graphics}
+The basic graphics output in GPU makes use of the few control instructions (such as \reg{DCOLOR}, which changes the current drawing color), and the few drawing instructions (for example \reg{DRECT}, \reg{DLINE}, etc).
+
+The basic graphics output only requires use of the frame-based drawing mode. The GPU will clear the screen to black each frame, and set the current color to black too. To draw something the color must first be set to wanted color, and then some drawing instructions must be executed:
+\begin{verbatim}
+dcolor white;
+drect rect_point1,rect_point2;
+dexit; //Program must be correctly terminated
+
+//Compiler macros for data:
+color white,255,255,255;
+
+vec2f rect_point1,50,50;
+vec2f rect_point2,100,150;
+\end{verbatim}
+
+These are all the basic drawing instruction that can be used:
+\singlespacing
+\begin{longtable}{|c|p{3.4in}|} \hline
+Instruction & Description \\ \hline
+\reg{DRECT} & Draw a rectangle between two endpoints \\ \hline
+\reg{DRECTWH} & Draw a rectangle at some point (first operand), with some size (second operand) \\ \hline
+\reg{DORECT} & Similar to \reg{DRECT}, but draws a rectangle outline \\ \hline
+\reg{DORECTWH} & Similar to \reg{DRECTWH}, but draws a rectangle outline \\ \hline
+\reg{DCIRCLE} & Draw a circle at some point (first operand), with some radius (second operand) \\ \hline
+\reg{DLINE} & Draws a line between two points. Width specified with the \reg{DSETWIDTH} instruction \\ \hline
+\reg{DVXPOLY} & Draw a custom polygon \\ \hline
+\end{longtable}
+\onehalfspacing
+
+It's possible to specify quality at which the circle is drawn:
+\begin{verbatim}
+dcolor white;
+mov #regCircleQuality,8; //8 vertices in the circle
+dcircle pos,256; //Draw a circle in middle of the screen,
+                 //and covering the entire screen
+dexit;
+
+//Compiler macros for data:
+color white,255,255,255;
+vec2f pos,256,256;
+\end{verbatim}
+
+It's also possible to draw 2D polygons (each polygon may have up to 128 vertices in it):
+\begin{verbatim}
+dcolor white;
+dvxpoly polygon_data,4;
+dexit;
+
+//Compiler macros for data:
+color white,255,255,255;
+
+polygon_data: //Polygon for a distorted rectangle
+  db 50,50;
+  db 190,50;
+  db 120,190;
+  db 50,120;
+\end{verbatim}
+
+It's possible to use all of these instructions to draw textured data (see page \pageref{gputexturing})
+
+\subsection{Asynchronous Thread}
+Asynchonous thread runs in parallel to the main frame-based rendering thread, but it is not synchronized to frame boundaries (while the normal frame-based mode will restart execution each time it must render a new frame). It's possible to use both at the same time, or use just one of two.
+
+Asynchonous thread is not active by default, but it can be started up using the following code:
+\begin{verbatim}
+//Setup entrypoints
+dentrypoint 0,DrawThread; 
+dentrypoint 4,AsyncThread;
+
+//Set asynchronous thread frequency (speed)
+mov #regAsyncFreq,200000;
+//Run the thread
+mov #regAsyncClk,1; 
+dexit;
+
+DrawThread: //Do nothing
+dexit;
+
+AsyncThread:
+  ...
+jmp AsyncThread;
+\end{verbatim}
+
+Asychronous thread frequency may be set up to 1,200,000. If asynchonous thread encounters an error, and there is no specified error handler, it will simply shut down (and reset \reg{AsyncClk} register back to 0).
+
+It's possible to perform rendering in asynchonous thread in two ways. There are built-in opcodes which allow to draw to texture buffer, and then copy that image back into the front buffer. They require the hardware clear feature to be disabled though:
+\begin{verbatim}
+mov #regHWClear,0;
+....
+
+AsyncThread:
+  dbegin; //Start drawing
+    ... //Drawing code of any length
+  dend; //Copy the image to front buffer
+  
+  dvsync; //If rendering is too fast, it can be synchronized with frame
+          //generation, making it less resource intensive
+jmp AsyncThread;
+\end{verbatim}
+
+It's also possible to manually switch buffers for drawing. See page \pageref{gpubuffers} for more information on that.
+
+\subsection{Error Handling}
+If any error is encountered during the GPU execution, it will be handled in one of the possible ways:
+\begin{itemize}
+	\item In frame-based mode with no entrypoint for the error handler set the GPU will display an error screen, detailing the error code and the error address.
+	\item In frame-based mode with entrypoint set for the error handler the GPU will jump to the error handler. There must be no error occuring in the error handler itself, or the GPU will be stuck in an infinite loop until the frame ends.
+	\item In asynchonous mode with no error handler an error will cause the thread to halt.
+	\item In asynchonous mode with an error handler defined the thread will jump over to that error handler. Just as with the frame-based mode, and error inside the error handler will cause an infinite loop.
+\end{itemize}
+
+Entrypoint for error handler in the frame-based mode is \reg{3}, and entrypoint for the asynchonous thread error handler is \reg{5}. The error code will be passed in the \reg{LINT} internal register, and the error parameter is passed in the \reg{LADD} register. Here's an example of how to setup an error handler in both threads:
+\begin{verbatim}
+//Setup entrypoints
+dentrypoint 0,DrawThread;
+dentrypoint 3,DrawError;
+dentrypoint 4,AsyncThread;
+dentrypoint 5,AsyncError;
+
+....
+
+DrawError:
+  cpuget R0,28; //Read error parameter
+  cpuget R1,27; //Read error code
+  ....
+dexit;
+
+AsyncError: //Similar to DrawError
+  cpuget R0,28; //Read error parameter
+  cpuget R1,27; //Read error code
+  ....
+Stop: dvsync; jmp Stop; //Stop with infinite loop
+\end{verbatim}
+
+\subsection{Coordinate Transformations}
+GPU provides several coordinate transformations. This allows programmer to control how the screen coordinates, which are generated by the drawing instructions, are mapped to screen coordiantes. The GPU native screen size is always 512x512 pixels (size of the rasterizer buffer/front buffer).
+
+Coordinate transformation pipe (routine) can be selected using the \reg{DCPIPE} opcode:
+\begin{verbatim}
+dcpipe 2; //Select transformation pipe 2
+\end{verbatim}
+
+These coordinate transformation pipes are supported:
+\singlespacing
+\begin{longtable}{|c|p{3.4in}|} \hline
+Index & Description \\ \hline
+\reg{0} & Coordinates are unchanged \\ \hline
+\reg{1} & Screen height/width specified by \reg{Width} and \reg{Height} registers \\ \hline
+\reg{2} & Coordinates must be in 0..1 range \\ \hline
+\reg{3} & Coordinates must be in -1..1 range \\ \hline
+\reg{4} & All drawing is offset so point (0,0) is the screen center \\ \hline
+\end{longtable}
+\onehalfspacing
+  
+Before the coordinates are mapped to the screen ones the GPU also performs additional transformations based on the values of several register. This allows for scaling, rotating, offseting the result of drawing instructions:
+\begin{verbatim}
+dmove offset; //Move by vector 'offset'
+drotatescale 1.23,2; //Scale up twice, rotate by 1.23 radians
+drect ...; //Draw something
+
+drotatescale 0,1; //Reset rotation, scale
+dmove 0; //Reset offset
+\end{verbatim}
+
+Rotation is clockwise, argument is specified in radians. It's possible to scale on each axis separately, see the list of internal registers at page \pageref{gpuregs}.
+
+\subsection{Vertex Transformations}
+The GPU can also perform transformations on separate vertices which are being drawn via the drawing instructions. This is usually used to provide 3D graphics support.
+
+\subsection{Drawing 3D Graphics}
+no chapter
+
+\subsection{Rasterizer Control}
+no chapter
+
+\subsection{Cursor Control}
+no chapter
+
+\subsection{Color Transformation Control}
+no chapter
+
+\subsection{Font Rendering}
+no chapter
+paramlist
+
+\subsection{3D Rendering Control}
+no chapter
+
+\subsection{Indexed Rendering}
+no chapter
+
+\subsection{Switching buffers} \label{gpubuffers}
+no chapter
+
+\subsection{Texturing} \label{gputexturing}
+no chapter
+
+\subsection{Texture Transformations}
+no chapter
+
+\subsection{Advanced Rendering Instructions}
+no chapter
+DDFRAME, DDTERRAIN
+
+
+
+\section{Internal Registers} \label{gpuregs}
+The internal registers of the ZGPU are mapped to the memory, and are available as memory locations. They can be read and written to at any time, and they control various aspects of the ZGPU operation.
+
+All of these registers are available in the HL-ZASM compiler by prepending \reg{reg} prefix to the registers name.
+
+Memory offsets \reg{63488}..\reg{64511} are mapped to the IOBus (external ports). The memory offsets \reg{65536}..\reg{131071} are mapped to the MemBus, allowing for access to external devices from the GPU. There is support for both reading and writing this memory, although at very low speed.
+
+\singlespacing
+\begin{longtable}{|c|c|p{3.4in}|} \hline
+Name & Address & Description \\ \hline
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\regentry{Clk}           {65535}{Current GPU power state (if set to 0, the GPU will be shut down)}
+\regentry{Reset}         {65534}{Reset the GPU state}
+\regentry{HWClear}       {65533}{Enables or disables the hardware clear (front buffer filling to black)}
+\regentry{VertexMode}    {65532}{Enables or disables the vertex mode (raw vertex output instead of rasterizing)}
+\regentry{Halt}          {65531}{Halts the current GPU execution, and preserves image in the front buffer}
+\regentry{RAMReset}      {65530}{Clears the GPU RAM}
+\regentry{AsyncReset}    {65529}{Reset the asynchonous thread state}
+\regentry{AsyncClk}      {65528}{Asynchronous thread execution state}
+\regentry{AsyncFreq}     {65527}{Asynchronous thread frequency}
+\regentry{Index}         {65526}{GPU index, can be between 0 and 31}
+    
+\regentry{HScale}        {65525}{Horizontal image scale (for rasterized output)}
+\regentry{VScale}        {65524}{Vertical image scale (for rasterized output)}
+\regentry{HWScale}       {65523}{Hardware image scale}
+\regentry{Rotation}      {65522}{Rotation of the rasterized image. 0 for 0 deg, 1 for 90 deg, 2 for 180 deg, 3 for 270 deg}
+\regentry{TexSize}       {65521}{Subtexture size}
+\regentry{TexDataPtr}    {65520}{Pointer to texture data for load by the GPU}
+\regentry{TexDataSz}     {65519}{Size of the texture data for load by the GPU}
+\regentry{RasterQ}       {65518}{Rasterizer quality}
+\regentry{TexBuffer}     {65517}{Buffer used for the texturing (0: front buffer, 1: texture buffer)}
+
+\regentry{Width}         {65515}{Screen width (resolution)}
+\regentry{Height}        {65514}{Screen height (resolution)}
+\regentry{Ratio}         {65513}{Current screen ratio (physical)}
+\regentry{ParamList}     {65512}{Pointer to list of parameters for the \reg{DWRITEFMT} instruction, or 0 if unused}
+  
+\regentry{CursorX}       {65505}{X coordinate of the cursor (0..1)}
+\regentry{CursorY}       {65504}{Y coordinate of the cursor (0..1)}
+\regentry{Cursor}        {65503}{Should the cursor be drawn on screen}
+\regentry{CursorButtons} {65502}{State of the cursor buttons}
+  
+\regentry{BrightnessW}   {65495}{Total screen brightness}
+\regentry{BrightnessR}   {65494}{R component brightness}
+\regentry{BrightnessG}   {65493}{G component brightness}
+\regentry{BrightnessB}   {65492}{B component brightness}
+\regentry{ContrastW}     {65491}{Total screen contrast}
+\regentry{ContrastR}     {65490}{R component contrast}
+\regentry{ContrastG}     {65489}{G component contrast}
+\regentry{ContrastB}     {65488}{B component contrast}
+  
+\regentry{CircleQuality} {65485}{Circle output quality (number of vertices). Can be between 3 and 128}
+\regentry{OffsetX}       {65484}{X offset for screen coordinates of all drawn graphics}
+\regentry{OffsetY}       {65483}{Y offset for screen coordinates of all drawn graphics}
+\regentry{Rotation}      {65482}{Rotation in radians for screen coordinates of all drawn graphics}
+\regentry{Scale}         {65481}{Scale (1 is normal scale) for screen coordinates of all drawn graphics}
+\regentry{CenterX}       {65480}{X coordinate of centerpoint of rotation (see \reg{Rotation} register)}
+\regentry{CenterY}       {65479}{Y coordinate of centerpoint of rotation (see \reg{Rotation} register)}
+\regentry{CircleStart}   {65478}{Circle start angle (in radians)}
+\regentry{CircleEnd}     {65477}{Circle end angle (in radians)}
+\regentry{LineWidth}     {65476}{Line width}
+\regentry{ScaleX}        {65475}{X component of the scale for screen coordinates of all drawn graphics}
+\regentry{ScaleY}        {65474}{Y component of the scale for screen coordinates of all drawn graphics}
+\regentry{FontHalign}    {65473}{Font horizontal align mode}
+\regentry{ZOffset}       {65472}{Extra Z offset for all coordinates passed into vertex pipe}
+\regentry{FontValign}    {65471}{Font vertical align mode}
+\regentry{CullDistance}  {65470}{Culling distance}
+\regentry{CullMode}      {65469}{Face culling mode (0: front, 1: back)}
+\regentry{LightMode}     {65468}{Lighting mode (0: two-side, 1: front, -1: back)}
+\regentry{VertexArray}   {65467}{Pointer to array of vertices for indexed rendering}
+\regentry{TexRotation}   {65466}{Texture rotation in radians}
+\regentry{TexScale}      {65465}{Texture scale (1 is normal)}
+\regentry{TexCenterU}    {65464}{U component of centerpoint of texture rotation}
+\regentry{TexCenterV}    {65463}{V component of centerpoint of texture rotation}
+\regentry{TexOffsetU}    {65462}{U offset for the texture output}
+\regentry{TexOffsetV}    {65461}{V offset for the texture output}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\end{longtable}
+\onehalfspacing
+
+
+
+\newpage
+
+\section{Instruction Set Reference}
+
+\sintrentry{DTEST}{200}{0}
+This opcode generates a test pattern image on the GPU screen, somewhat similar to the PAL TV test pattern. It ignores any coordinate or texture transformations, and ignores all previous color commands/settings.
+
+The rightmost left black bar will be left transparent.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+W = ScreenWidth
+H = ScreenHeight
+    
+for bar=0,6 do
+  SetColor(TEST_PATTERN_COLOR[bar])
+  Rectangle(W*0.125*bar,0,W*0.125,H*0.80)
+end
+  
+for gray=0,7 do
+  SetColor(31*gray,31*gray,31*gray,255)
+  Rectangle(W*0.125*gray,H*0.80,W*0.125,H*0.20)
+end
+\end{verbatim}
+
+
+\intrentry{DEXIT/DVSYNC}{201}{0}
+Finishes drawing the current frame (used only in the frame-based mode). This must be the last instruction in any program that makes use of the frame-based mode.
+
+The execution may be terminated before this instruction if amount of cycles spent drawing the current frame exceeds total limit
+
+It's implementation is exactly same as that of the \reg{IDLE} instruction (while in the frame-based mode).
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+INTR = 1
+\end{verbatim}
+
+
+\intrentry{DCLR}{202}{0}
+Clears screen/current buffer by filling it with black background.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+SetColor(0,0,0,0)
+Rectangle(0,0,ScreenWidth,ScreenHeight)
+\end{verbatim}
+
+
+\intrentry{DCLRTEX}{203}{0}
+Clears screen/current buffer by filling it with a texture.
+
+If vertex texturing is enabled, it will use the texture specified by the \reg{DTEXTURE} opcode. Otherwise it will use the texture specified by the \reg{DXTEXTURE} opcode.
+
+If no texture was defined, it will fill buffer with solid black color.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+BindState()
+SetColor(0,0,0,255)
+Rectangle(0,0,ScreenWidth,ScreenHeight)
+\end{verbatim}
+
+
+\intrentry{DVXFLUSH}{204}{0}
+Draws all the pending polygons in the vertex buffer to screen, and clears the buffer.
+
+This instruction is used with vertex buffer enabled. It will perform Z-sorting, clipping, etc, and draw the output to screen.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+FlushBuffer()
+\end{verbatim}
+
+
+\intrentry{DVXCLEAR}{205}{0}
+Clears any pending polygons from the vertex buffer.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+ClearBuffer()
+\end{verbatim}
+
+
+\intrentry{DSETBUF\textunderscore VX}{206}{0}
+Sets the current drawing target to the raw vertex output. This opcode can only be used when vertex mode is active, and it is the default target for the vertex mode.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+SetRendertarget(2)
+\end{verbatim}
+
+
+\intrentry{DSETBUF\textunderscore SPR}{207}{0}
+Sets current drawing target to the texture buffer. Also known as \reg{DBACKBUF}.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+SetRenderTarget(1)
+\end{verbatim}
+
+
+\intrentry{DSETBUF\textunderscore FBO}{208}{0}
+Sets current drawing target to the front/main buffer. Also known as \reg{DFRONTBUF}.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+SetRenderTarget(0)
+\end{verbatim}
+
+
+\intrentry{DSWAP}{209}{0}
+Copies contents of the texture buffer into the front buffer.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+Copy(RenderTarget(1),RenderTarget(0))
+\end{verbatim}
+
+
+\intrentry{DVXPIPE}{210}{1}
+Selects the current vertex pipe/vertex transformation mode. This controls the transformation that brings world-space coordinates into screen coordinates. \reg{X} can be one of the following pipes:
+\begin{itemize}
+	\item \reg{0}: X, Y coordinates are used as the screen coordinates
+	\item \reg{1}: Y, Z coordinates are used as the screen coordinates
+	\item \reg{2}: X, Z coordinates are used as the screen coordinates
+	\item \reg{3}: Uses basic 3D perspective projection (Z: depth)
+	\item \reg{4}: Transforms X, Y coordinates with the current model matrix
+	\item \reg{5}: Performs 3D transformation with projection and model matrices
+\end{itemize}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+VertexPipe = X
+\end{verbatim}
+
+
+\intrentry{DCPIPE}{211}{1}
+Selects the current coordinate pipe/coordinate transformation mode. This controls the transformation that converts the screen coordinates into true coordinates, which are correctly mapped to the buffer. \reg{X} can be one of the following pipes:
+\begin{itemize}
+	\item \reg{0}: No transformation
+	\item \reg{1}: Mapped to screen using the \reg{Width} and \reg{Height} registers.
+	\item \reg{2}: Coordinates are transformed from 0..1 range.
+	\item \reg{3}: Coordinates are transformed from -1..1 range.
+	\item \reg{4}: Coordinates are relative to the screen center (and not the top-left corner).
+\end{itemize}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+CoordinatePipe = X
+\end{verbatim}
+
+
+\intrentry{DENABLE}{212}{1}
+Enables one of the internal GPU modes/switches. \reg{X} can be one of the following:
+\begin{itemize}
+  \item \reg{0}: Vertex buffer
+	\item \reg{1}: Z-Sorting for the triangles in the vertex buffer.
+	\item \reg{2}: Flat face lighting using the internal lighting system
+	\item \reg{3}: Front/back face culling
+	\item \reg{4}: Distance-based culling
+	\item \reg{5}: Texturing using the internal GPU buffers
+\end{itemize}
+
+For example:
+\begin{verbatim}
+//Prepare 3D drawing
+mov #regCullingDistance,4.0; //Setup culling distance
+denable 0; //Vertex buffer
+denable 1; //ZSorting
+denable 2; //Lighting
+denable 3; //Face culling
+denable 4; //Distance-based culling
+\end{verbatim}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+MODE_SWITCH[X] = 1
+\end{verbatim}
+
+
+\intrentry{DDISABLE}{213}{1}
+Disables one of the internal GPU modes/switches. \reg{X} can be one of the following:
+\begin{itemize}
+  \item \reg{0}: Vertex buffer
+	\item \reg{1}: Z-Sorting for the triangles in the vertex buffer.
+	\item \reg{2}: Flat face lighting using the internal lighting system
+	\item \reg{3}: Front/back face culling
+	\item \reg{4}: Distance-based culling
+	\item \reg{5}: Texturing using the internal GPU buffers
+\end{itemize}
+
+For example:
+\begin{verbatim}
+//Finish 3D drawing
+ddisable 0; //Vertex buffer
+ddisable 1; //ZSorting
+ddisable 2; //Lighting
+ddisable 3; //Face culling
+ddisable 4; //Distance-based culling
+\end{verbatim}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+MODE_SWITCH[X] = 0
+\end{verbatim}
+
+
+\intrentry{DCLRSCR}{214}{1}
+Clears screen with the specified color.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+SetColor(X)
+Rectangle(0,0,ScreenWidth,ScreenHeight)
+\end{verbatim}
+
+
+\intrentry{DCOLOR}{215}{1}
+Sets the current drawing color.
+
+If the vertex buffer is enabled, it will change the color of all the following polygons in the buffer (until the next \reg{DCOLOR} command, or end of buffer).
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+SetColor(X)
+\end{verbatim}
+
+
+\intrentry{DTEXTURE}{216}{1}
+Sets a texture out of one of the internal buffers. The buffer texture data is taken from is specified by the \reg{TexBuffer} register.
+
+By default it will take the entire buffer as the texture, but it is possible to specify smaller subtextures of the buffer. For example, it's possible to use four 256x256 textures, or 16 128x128 textures. If it is done so, the \reg{X} parameter will specify which subtexture must be used.
+
+Example:
+\begin{verbatim}
+mov #regTexBuffer,0; //Select front buffer
+mov #regTexSize,128; //128x128 subtextures
+dtexture 2; //Bind subtexture #2
+\end{verbatim}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+SetBufferTexture(X)
+\end{verbatim}
+
+
+\intrentry{DSETFONT}{217}{1}
+Set the current font for all operations which output text. There are 8 fonts available:
+\begin{itemize}
+	\item \reg{0}: Letter Gothic (Lucida Console)
+	\item \reg{1}: Courier New
+	\item \reg{2}: Trebuchet
+	\item \reg{3}: Arial
+	\item \reg{4}: Times New Roman
+	\item \reg{5}: Coolvetica
+	\item \reg{6}: Akbar
+	\item \reg{7}: CSD
+\end{itemize}
+\textbf{Psuedocode:}
+\begin{verbatim}
+Font = X
+\end{verbatim}
+
+
+\intrentry{DSETSIZE}{218}{1}
+Set the current font size for all operations which output text. Size can be any integer value between 4 and 200.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+
+
+\intrentry{DMOVE}{219}{1}
+Set the offset for 2D drawing. This instruction will offset all screen coordinates of next rendering instructions by the given vector.
+
+\reg{X} must be a pointer to vector, or it can be 0. If \reg{X} is equal to zero then offset will be removed.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+Registers[OffsetX] = X.x
+Registers[OffsetY] = X.y
+\end{verbatim}
+
+
+\intrentry{DVXDATA\textunderscore 2F}{220}{2}
+Draw a single 2D polygon with up to 128 vertices. Also known as \reg{DVXPOLY}.
+
+If vertex array mode is not used, \reg{X} points to an array of polygon vertex coordinates, and \reg{Y} specifies the total count of vertices.
+
+In vertex array mode, \reg{X} points to an array of indexes into the vertex array, and \reg{Y} specifies the total count of vertices.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+VDATA = Registers[VertexArray]
+for IDX=1,MIN(128,Y) do
+  if VDATA > 0 then
+    VIDX = ReadCell(X+IDX-1)
+    VD[IDX] = {
+      x = ReadCell(VDATA+VIDX*2+0),
+      y = ReadCell(VDATA+VIDX*2+1)}
+  else
+    VD[IDX] = {
+      x = ReadCell(X+(IDX-1)*2+0),
+      y = ReadCell(X+(IDX-1)*2+1)}
+  end
+  ComputeTextureUV(VD[IDX],VD[IDX].x/512,VD[IDX].y/512)
+end
+DrawToBuffer(VD)
+\end{verbatim}
+
+\intrentry{DVXDATA\textunderscore 2F\textunderscore TEX}{221}{2}
+Draw a single textured 2D polygon with up to 128 vertices. Also known as \reg{DVXTEXPOLY}.
+
+If vertex array mode is not used, \reg{X} points to an array of polygon vertex coordinates and texture coordinates, and \reg{Y} specifies the total count of vertices.
+
+In vertex array mode, \reg{X} points to an array of indexes into the vertex array, and \reg{Y} specifies the total count of vertices.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+VDATA = Registers[VertexArray]
+for IDX=1,MIN(128,Y) do
+  if VDATA > 0 then
+    VIDX = ReadCell(X+IDX-1)
+    VD[IDX] = {
+      x = ReadCell(VDATA+VIDX*4+0),
+      y = ReadCell(VDATA+VIDX*4+1)}
+    ComputeTextureUV(VD[IDX],
+      ReadCell(VDATA+VIDX*4+2),
+      ReadCell(VDATA+VIDX*4+3))
+  else
+    VD[IDX] = {
+      x = ReadCell(X+(IDX-1)*4+0),
+      y = ReadCell(X+(IDX-1)*4+1)}      
+    ComputeTextureUV(VD[IDX],
+      ReadCell(X+(IDX-1)*4+2),
+      ReadCell(X+(IDX-1)*4+3))
+  end
+end
+DrawToBuffer(VD)
+\end{verbatim}
+
+
+\intrentry{DVXDATA\textunderscore 3F}{222}{2}
+Draw a single 3D polygon with up to 128 triangles.
+
+If vertex array mode is not used, \reg{X} points to an array of triangle vertex coordinates, and \reg{Y} specifies the total count of triangles.
+
+In vertex array mode, \reg{X} points to an array of indexes into the vertex array, and \reg{Y} specifies the total count of triangles.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+VDATA = Registers[VertexArray]
+for IDX=1,MIN(128,Y) do
+  if VDATA > 0 then
+    VIDX1 = ReadCell(X+(IDX-1)*3+0)
+    VIDX2 = ReadCell(X+(IDX-1)*3+1)
+    VIDX3 = ReadCell(X+(IDX-1)*3+2)
+    VD[1] = {
+      x = ReadCell(VDATA+VIDX1*3+0),
+      y = ReadCell(VDATA+VIDX1*3+1),
+      z = ReadCell(VDATA+VIDX1*3+2)}
+    VD[2] = {
+      x = ReadCell(VDATA+VIDX2*3+0),
+      y = ReadCell(VDATA+VIDX2*3+1),
+      z = ReadCell(VDATA+VIDX2*3+2)}
+    VD[3] = {
+      x = ReadCell(VDATA+VIDX3*3+0),
+      y = ReadCell(VDATA+VIDX3*3+1),
+      z = ReadCell(VDATA+VIDX3*3+2)}
+  else
+    VD[1] = {
+      x = ReadCell(X+(IDX-1)*9+0),
+      y = ReadCell(X+(IDX-1)*9+1),
+      z = ReadCell(X+(IDX-1)*9+2)}
+    VD[2] = {
+      x = ReadCell(X+(IDX-1)*9+3),
+      y = ReadCell(X+(IDX-1)*9+4),
+      z = ReadCell(X+(IDX-1)*9+5)}
+    VD[3] = {
+      x = ReadCell(X+(IDX-1)*9+6),
+      y = ReadCell(X+(IDX-1)*9+7),
+      z = ReadCell(X+(IDX-1)*9+8)}
+  end
+    
+  ComputeTextureUV(VD[1],0,0)
+  ComputeTextureUV(VD[2],1,0)
+  ComputeTextureUV(VD[3],1,1)
+   
+  DrawToBuffer(VD)
+end
+\end{verbatim}
+
+
+\intrentry{DVXDATA\textunderscore 3F\textunderscore TEX}{223}{2}
+Draw a single textured 3D polygon with up to 128 triangles.
+
+If vertex array mode is not used, \reg{X} points to an array of triangle vertex coordinates and texture coordinates, and \reg{Y} specifies the total count of triangles.
+
+In vertex array mode, \reg{X} points to an array of indexes into the vertex array, and \reg{Y} specifies the total count of triangles.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+VDATA = Registers[VertexArray]
+for IDX=1,MIN(128,Y) do
+    if VDATA > 0 then
+      $L VIDX1 = ReadCell(X+(IDX-1)*3+0)
+      $L VIDX2 = ReadCell(X+(IDX-1)*3+1)
+      $L VIDX3 = ReadCell(X+(IDX-1)*3+2)
+      VD[1] = {
+        x = ReadCell(VDATA+VIDX1*5+0),
+        y = ReadCell(VDATA+VIDX1*5+1),
+        z = ReadCell(VDATA+VIDX1*5+2),
+      }
+      VD[2] = {
+        x = ReadCell(VDATA+VIDX2*5+0),
+        y = ReadCell(VDATA+VIDX2*5+1),
+        z = ReadCell(VDATA+VIDX2*5+2),
+      }
+      VD[3] = {
+        x = ReadCell(VDATA+VIDX3*5+0),
+        y = ReadCell(VDATA+VIDX3*5+1),
+        z = ReadCell(VDATA+VIDX3*5+2),
+      }
+      
+      ComputeTextureUV(VD[1],
+        ReadCell(VDATA+VIDX1*5+3),
+        ReadCell(VDATA+VIDX1*5+4))
+      ComputeTextureUV(VD[2],
+        ReadCell(VDATA+VIDX2*5+3),
+        ReadCell(VDATA+VIDX2*5+4))
+      ComputeTextureUV(VD[3],
+        ReadCell(VDATA+VIDX3*5+3),
+        ReadCell(VDATA+VIDX3*5+4))
+    else
+      VD[1] = {
+        x = ReadCell(X+(IDX-1)*15+0),
+        y = ReadCell(X+(IDX-1)*15+1),
+        z = ReadCell(X+(IDX-1)*15+2),
+      }
+      VD[2] = {
+        x = ReadCell(X+(IDX-1)*15+5),
+        y = ReadCell(X+(IDX-1)*15+6),
+        z = ReadCell(X+(IDX-1)*15+7),
+      }
+      VD[3] = {
+        x = ReadCell(X+(IDX-1)*15+10),
+        y = ReadCell(X+(IDX-1)*15+11),
+        z = ReadCell(X+(IDX-1)*15+12),
+      }
+      
+      ComputeTextureUV(VD[1],
+        ReadCell(X+(IDX-1)*15+ 3),
+        ReadCell(X+(IDX-1)*15+ 4))
+      ComputeTextureUV(VD[2],
+        ReadCell(X+(IDX-1)*15+ 8),
+        ReadCell(X+(IDX-1)*15+ 9))
+      ComputeTextureUV(VD[3],
+        ReadCell(X+(IDX-1)*15+13),
+        ReadCell(X+(IDX-1)*15+14))
+    end
+    
+    self:Dyn_EmitInterruptCheck()
+    DrawToBuffer(VD)
+  end
+\end{verbatim}
+
+
+\intrentry{DVXDATA\textunderscore 3F\textunderscore WF}{224}{2}
+Draw a single wireframe 3D polygon with up to 128 triangles.
+
+If vertex array mode is not used, \reg{X} points to an array of triangle vertex coordinates and texture coordinates, and \reg{Y} specifies the total count of triangles.
+
+In vertex array mode, \reg{X} points to an array of indexes into the vertex array, and \reg{Y} specifies the total count of triangles.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+VDATA = Registers[VertexArray]
+for IDX=1,MIN(128,Y) do
+  if VDATA > 0 then
+    VIDX1 = ReadCell(X+(IDX-1)*3+0)
+    VIDX2 = ReadCell(X+(IDX-1)*3+1)
+    VIDX3 = ReadCell(X+(IDX-1)*3+2)
+    VD[1] = {
+      x = ReadCell(VDATA+VIDX1*3+0),
+      y = ReadCell(VDATA+VIDX1*3+1),
+      z = ReadCell(VDATA+VIDX1*3+2)}
+    VD[2] = {
+      x = ReadCell(VDATA+VIDX2*3+0),
+      y = ReadCell(VDATA+VIDX2*3+1),
+      z = ReadCell(VDATA+VIDX2*3+2)}
+    VD[3] = {
+      x = ReadCell(VDATA+VIDX3*3+0),
+      y = ReadCell(VDATA+VIDX3*3+1),
+      z = ReadCell(VDATA+VIDX3*3+2)}
+  else
+    VD[1] = {
+      x = ReadCell(X+(IDX-1)*9+0),
+      y = ReadCell(X+(IDX-1)*9+1),
+      z = ReadCell(X+(IDX-1)*9+2)}
+    VD[2] = {
+      x = ReadCell(X+(IDX-1)*9+3),
+      y = ReadCell(X+(IDX-1)*9+4),
+      z = ReadCell(X+(IDX-1)*9+5)}
+    VD[3] = {
+      x = ReadCell(X+(IDX-1)*9+6),
+      y = ReadCell(X+(IDX-1)*9+7),
+      z = ReadCell(X+(IDX-1)*9+8)}
+  end
+    
+  ComputeTextureUV(VD[1],0,0)
+  ComputeTextureUV(VD[2],1,0)
+  ComputeTextureUV(VD[3],1,1)
+   
+  DrawToBuffer(VD,WIREFRAME)
+end
+\end{verbatim}
+
+
+\intrentry{DRECT}{225}{2}
+Draws a single rectangle. \reg{X} is a pointer to vector which specifies the top-left vertex, and \reg{Y} is a pointer to vector which specifies the bottom-right vertex.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+  VD[1] = {
+    x = ReadCell(X+0),
+    y = ReadCell(X+1)}
+  VD[2] = {
+    x = ReadCell(Y+0),
+    y = ReadCell(X+1)}
+  VD[3] = {
+    x = ReadCell(Y+0),
+    y = ReadCell(Y+1)}
+  VD[4] = {
+    x = ReadCell(X+0),
+    y = ReadCell(Y+1)}
+  
+  ComputeTextureUV(VD[1],0,0)
+  ComputeTextureUV(VD[2],1,0)
+  ComputeTextureUV(VD[3],1,1)
+  ComputeTextureUV(VD[4],0,1)
+
+  DrawToBuffer(VD)
+\end{verbatim}
+
+
+\intrentry{DCIRCLE}{226}{2}
+Draws a circle or a sector with specific radius and angles.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+  R = Y
+  SIDES = clamp(ReadCell(65485),3,64)
+  START = ReadCell(65478)
+  END = ReadCell(65477)
+  STEP = (END-START)/SIDES
+  VEC = ReadVector2f(X)
+  
+  for IDX=1,SIDES do
+    VD[1] = {
+      x = VEC.x + R*sin(START+STEP*(IDX+0)),
+      y = VEC.y + R*cos(START+STEP*(IDX+0))}
+    VD[2] = {
+      x = VEC.x,
+      y = VEC.y}
+    VD[3] = {
+      x = VEC.x + R*sin(START+STEP*(IDX+1)),
+      y = VEC.y + R*cos(START+STEP*(IDX+1))}
+    
+    ComputeTextureUV(VD[1],0,0)
+    ComputeTextureUV(VD[2],1,0)
+    ComputeTextureUV(VD[3],1,1)
+    
+    DrawToBuffer(VD)
+  end
+\end{verbatim}
+
+
+\intrentry{DLINE}{227}{2}
+Draws a line between two points specified by the vectors \reg{X} and \reg{Y}.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+  DrawLine(ReadVector2f($1),ReadVector2f($2))
+\end{verbatim}
+
+
+\intrentry{DRECTWH}{228}{2}
+Draws a single rectangle. \reg{X} is a pointer to vector which specifies the top-left corner coordinates, and \reg{Y} is a pointer to vector which specifies the Rectangle size.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+  VD[1] = {
+    x = ReadCell(X+0),
+    y = ReadCell(X+1)}
+  VD[2] = {
+    x = ReadCell(X+0)+ReadCell(Y+0),
+    y = ReadCell(X+1)}
+  VD[3] = {
+    x = ReadCell(X+0)+ReadCell(Y+0),
+    y = ReadCell(X+1)+ReadCell(Y+1)}
+  VD[4] = {
+    x = ReadCell(X+0),
+    y = ReadCell(X+1)+ReadCell(Y+1)}
+  
+  ComputeTextureUV(VD[1],0,0)
+  ComputeTextureUV(VD[2],1,0)
+  ComputeTextureUV(VD[3],1,1)
+  ComputeTextureUV(VD[4],0,1)
+
+  DrawToBuffer(VD)
+\end{verbatim}
+
+
+\intrentry{DORECT}{229}{2}
+Draws an outline of a rectangle. \reg{X} is a pointer to vector which specifies the top-left vertex, and \reg{Y} is a pointer to vector which specifies the bottom-right vertex.
+
+The line width can be specified with the \reg{DSETWIDTH} instruction.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+  VD[1] = {
+    x = ReadCell(X+0),
+    y = ReadCell(X+1)}
+  VD[2] = {
+    x = ReadCell(Y+0),
+    y = ReadCell(X+1)}
+  VD[3] = {
+    x = ReadCell(Y+0),
+    y = ReadCell(Y+1)}
+  VD[4] = {
+    x = ReadCell(X+0),
+    y = ReadCell(Y+1)}
+
+  DrawLine(VD[1],VD[2])
+  DrawLine(VD[2],VD[3])
+  DrawLine(VD[3],VD[4])
+  DrawLine(VD[4],VD[1])
+\end{verbatim}
+
+
+\intrentry{DTRANSFORM2F}{230}{2}
+Transforms a 2D vector using the projection and the modelview matrices.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+
+
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+
+
+\intrentry{DTRANSFORM3F}{231}{2}
+Transforms a 3D vector using the projection and the modelview matrices.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+
+
+\intrentry{DSCRSIZE}{232}{2}
+Sets the current screen size.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+Registers[Width] = X
+Registers[Height] = Y
+\end{verbatim}
+
+
+\intrentry{DROTATESCALE}{233}{2}
+Rotates and scales coordinates of all following graphics instructions. The default centerpoint of rotation is (0,0) which can be changed using the \reg{CenterX} and the \reg{CenterY} registers.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+Registers[Rotation] = X
+Registers[Scale] = Y
+\end{verbatim}
+
+
+\intrentry{DORECTWH}{234}{2}
+Draws an outline of a rectangle. \reg{X} is a pointer to vector which specifies the top-left corner coordinates, and \reg{Y} is a pointer to vector which specifies the Rectangle size.
+
+The line width can be specified with the \reg{DSETWIDTH} instruction.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+  VD[1] = {
+    x = ReadCell(X+0),
+    y = ReadCell(X+1)}
+  VD[2] = {
+    x = ReadCell(X+0)+ReadCell(Y+0),
+    y = ReadCell(X+1)}
+  VD[3] = {
+    x = ReadCell(X+0)+ReadCell(Y+0),
+    y = ReadCell(X+1)+ReadCell(Y+1)}
+  VD[4] = {
+    x = ReadCell(X+0),
+    y = ReadCell(X+1)+ReadCell(Y+1)}
+  
+  DrawLine(VD[1],VD[2])
+  DrawLine(VD[2],VD[3])
+  DrawLine(VD[3],VD[4])
+  DrawLine(VD[4],VD[1])
+\end{verbatim}
+
+
+\intrentry{DCULLMODE}{235}{2}
+Sets the current culling mode and lighting mode.
+
+\reg{X} sets the culling mode:
+\begin{itemize}
+	\item \reg{0}: front face culling
+	\item \reg{1}: back face culling
+\end{itemize}
+
+\reg{Y} sets the lighting mode:
+\begin{itemize}
+	\item \reg{0}: double-side lighting
+	\item \reg{1}: front side lighting
+	\item \reg{-1}: back side lighting
+\end{itemize}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+Register[CullMode] = X
+Register[LightMode] = X
+\end{verbatim}
+
+
+\intrentry{DPIXEL}{238}{2}
+Outputs a single pixel to screen. \reg{X} is a pointer to vector which specifies coordinates on screen (can be non-integer, which will cause anti-aliasing effect), and \reg{Y} is a pointer to color of the pixel.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+SetPixel(X,Y)
+\end{verbatim}
+
+
+\intrentry{DWRITE}{240}{2}
+Writes a null-terminated string to screen. \reg{X} is a pointer to vector that specifies the position of string on screen, and \reg{Y} is the pointer to the first character of the string.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+TEXT = VM:ReadString(Y)
+FontWrite(X,TEXT)
+\end{verbatim}
+
+
+\intrentry{DWRITEI}{241}{2}
+Writes a integer value to screen. \reg{X} is a pointer to vector that specifies the position of string on screen, and \reg{Y} is the value that must be drawn on screen.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+FontWrite(X,Integer(Y))
+\end{verbatim}
+
+
+\intrentry{DWRITEF}{242}{2}
+Writes a floating-point value to screen. \reg{X} is a pointer to vector that specifies the position of string on screen, and \reg{Y} is the value that must be drawn on screen.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+FontWrite(X,Y)
+\end{verbatim}
+
+
+\intrentry{DENTRYPOINT}{243}{2}
+Sets one of the GPU entrypoints. Each entrypoint corresponds to a specific function, there are the following entrypoints available right now:
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+
+
+\intrentry{DSETLIGHT}{244}{2}
+Sets parameters of one of the 8 lights supported by the GPU. \reg{X} is the light index (0..7), and \reg{Y} points to the following data structure:
+\begin{verbatim}
+LightData:
+  vector4f position,<x>,<y>,<z>,0;
+  vector4f color,<r>,<g>,<b>,<brightness>;
+\end{verbatim}
+
+Light brightness is usually set to 1, but can vary.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+if (X < 0) or (X > 7) then
+  Interrupt(19,0)
+else
+  Lights[X] = {
+    Position = ReadVector4f(Y+0),
+    Color    = ReadVector4f(Y+4)}
+end
+\end{verbatim}
+
+
+\intrentry{DGETLIGHT}{245}{2}
+Reads light data for one of the 8 lights supported by the GPU. \reg{X} is the light index (0..7), and \reg{Y} points to the following data structure, which will be filled with light data:
+\begin{verbatim}
+LightData:
+  vector4f position,<x>,<y>,<z>,0;
+  vector4f color,<r>,<g>,<b>,<brightness>;
+\end{verbatim}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+N/A
+\end{verbatim}
+
+
+\intrentry{DWRITEFMT}{246}{2}
+Writes a formatted string to screen. \reg{X} points to vector that specifies the position of string on screen, and \reg{Y} is the string that must be drawn on screen.
+
+Variables used in the string format must follow the string data. If \reg{ParamList} register is set, then variables used in the string format start at that offset.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+N/A
+\end{verbatim}
+
+
+\intrentry{DWRITEFIX}{247}{2}
+Writes a fixed-point value to screen. \reg{X} is a pointer to vector that specifies the position of string on screen, and \reg{Y} is the value that must be drawn on screen.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+N/A
+\end{verbatim}
+
+
+\intrentry{DTEXTWIDTH}{248}{2}
+Returns the width of string using the current font, and writes it to \reg{X}.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+
+
+\intrentry{DTEXTHEIGHT}{249}{2}
+Returns the height of string using the current font, and writes it to \reg{X}.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+
+
+%\intrentry{DLOOPXY}{259}{2}
+%
+%\textbf{Psuedocode:}
+%\begin{verbatim}
+%\end{verbatim}
+
+
+\intrentry{MLOADPROJ}{271}{1}
+Loads given matrix into the GPU projection matrix. \reg{X} points to the matrix.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+ProjectionMatrix = ReadMatrix(X)
+\end{verbatim}
+
+
+\intrentry{MREAD}{272}{1}
+Reads GPU model matrix. \reg{X} points to the matrix into which model matrix will be written.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+WriteMatrix(X,ModelMatrix)
+\end{verbatim}
+
+
+\intrentry{DT}{274}{1}
+Returns time passed since last frame (works only in frame-based mode).
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+X = TimerDT
+\end{verbatim}
+
+
+\intrentry{DSHADE}{276}{1}
+Shades the current color by specific amount. \reg{X} is the shading value. A value between 0 and 1 will make the color darker, a value of 1 will not change the current color, while value higher than 1 will make color brighter.
+
+There is no normalization, so values outside of 0..1 range might generate weird colors.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+Color.x = Color.x*X
+Color.y = Color.y*X
+Color.z = Color.z*X
+SetColor(Color)
+\end{verbatim}
+
+
+\intrentry{DSETWIDTH}{277}{1}
+Sets line width.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+Register[LineWidth] = X
+\end{verbatim}
+
+
+\intrentry{MLOAD}{278}{1}
+Loads given matrix into the GPU model matrix. \reg{X} points to the matrix.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+ModelMatrix = ReadMatrix(X)
+\end{verbatim}
+
+
+\intrentry{DSHADENORM}{279}{1}
+Shades the current color by specific amount. \reg{X} is the shading value. A value between 0 and 1 will make the color darker, a value of 1 will not change the current color, while value higher than 1 will make color brighter.
+
+The resulting color is normalized, so it's possible to use values outside of the 0..1 range.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+Color.x = Clamp(Color.x*X,0,255)
+Color.y = Clamp(Color.y*X,0,255)
+Color.z = Clamp(Color.z*X,0,255)
+SetColor(Color)
+\end{verbatim}
+
+
+\intrentry{DDFRAME}{280}{1}
+Draws a framed rectangle. \reg{X} points to the following data structure:
+\begin{verbatim}
+FrameData:
+  vector2f position,<x>,<y>;
+  vector2f size,<w>,<h>;
+  vector4f info,<shadow>,<highlight>,<face>,<border size>;
+\end{verbatim}
+
+The \reg{info} entry stores pointers to colors that must be used in rendering.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+V1 = ReadVector2f(X+0)
+V2 = ReadVector2f(X+2)
+V3 = ReadVector4f(X+4)
+  
+CSHADOW    = ReadVector3f(V3.x)
+CHIGHLIGHT = ReadVector3f(V3.y)
+CFACE      = ReadVector3f(V3.z)
+
+VD1[1] = {
+  x = V3.w + V1.x,
+  y = V3.w + V1.y}
+VD1[2] = {
+  x = V3.w + V1.x + V2.x,
+  y = V3.w + V1.y}
+VD1[3] = {
+  x = V3.w + V1.x + V2.x,
+  y = V3.w + V1.y + V2.y}
+VD1[4] = {
+  x = V3.w + V1.x,
+  y = V3.w + V1.y + V2.y}
+
+VD2[1] = {
+  x = -V3.w + V1.x,
+  y = --V3.w + V1.y}
+VD2[2] = {
+  x = -V3.w + V1.x + V2.x,
+  y = -V3.w + V1.y}
+VD2[3] = {
+  x = -V3.w + V1.x + V2.x,
+  y = -V3.w + V1.y + V2.y}
+VD2[4] = {
+  x = -V3.w + V1.x,
+  y = -V3.w + V1.y + V2.y}
+
+VD3[1] = {
+  x = V1.x,
+  y = V1.y}
+VD3[2] = {
+  x = V1.x + V2.x,
+  y = V1.y}
+VD3[3] = {
+  x = V1.x + V2.x,
+  y = V1.y + V2.y}
+VD3[4] = {
+  x = V1.x,
+  y = V1.y + V2.y}
+
+ComputeTextureUV(VD1[1],0,0)
+ComputeTextureUV(VD1[2],1,0)
+ComputeTextureUV(VD1[3],1,1)
+ComputeTextureUV(VD1[4],0,1)
+  
+ComputeTextureUV(VD2[1],0,0)
+ComputeTextureUV(VD2[2],1,0)
+ComputeTextureUV(VD2[3],1,1)
+ComputeTextureUV(VD2[4],0,1)
+  
+ComputeTextureUV(VD3[1],0,0)
+ComputeTextureUV(VD3[2],1,0)
+ComputeTextureUV(VD3[3],1,1)
+ComputeTextureUV(VD3[4],0,1)
+
+SetColor(CSHADOW)
+DrawToBuffer(VD1)
+SetColor(CHIGHLIGHT)
+DrawToBuffer(VD2)
+SetColor(CFACE)
+DrawToBuffer(VD3)
+\end{verbatim}
+
+
+%\intrentry{DDBAR}{281}{1}
+
+%\textbf{Psuedocode:}
+%\begin{verbatim}
+%\end{verbatim}
+
+
+%\intrentry{DDGAUGE}{282}{1}
+%
+%\textbf{Psuedocode:}
+%\begin{verbatim}
+%\end{verbatim}
+
+
+\intrentry{DRASTER}{283}{1}
+Set raster quality.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+Registers[RasterQ] = X
+\end{verbatim}
+
+
+\intrentry{DDTERRAIN}{284}{1}
+Draw 3D terrain.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+W = ReadCell(X+0)
+H = ReadCell(X+1)
+R = clamp(floor(ReadCell(X+2)),0,16)
+U = ReadCell(X+3)
+V = ReadCell(X+4)
+
+MinX = clamp(floor(W/2 + U - R),1,W-1)
+MinY = clamp(floor(H/2 + V - R),1,H-1)
+MaxX = clamp(floor(W/2 + U + R),1,W-1)
+MaxY = clamp(floor(H/2 + V + R),1,H-1)
+
+for X=MinX,MaxX do
+  for Y=MinY,MaxY do
+    XPOS = X - W/2 - U - 0.5
+    YPOS = Y - H/2 - U - 0.5
+
+    if (X > 0) and (X <= W-1) and (Y > 0) and (Y <= H-1) and (XPOS^2+YPOS^2 <= R^2) then
+      Z1 = ReadCell(X+16+(Y-1)*W+(X-1)
+      Z2 = ReadCell(X+16+(Y-1)*W+(X-0)
+      Z3 = ReadCell(X+16+(Y-0)*W+(X-0)
+      Z4 = ReadCell(X+16+(Y-0)*W+(X-1)
+      
+      VD[1] = { x = XPOS,   y = YPOS,   y = Z1 }
+      VD[2] = { x = XPOS+1, y = YPOS,   y = Z2 }
+      VD[3] = { x = XPOS+1, y = YPOS+1, y = Z3}
+
+      ComputeTextureUV(VD[1],0,0)
+      ComputeTextureUV(VD[2],1,0)
+      ComputeTextureUV(VD[3],1,1)
+      DrawToBuffer(VD)
+        
+      VD[1] = { x = XPOS,   y = YPOS,   y = Z1}
+      VD[2] = { x = XPOS,   y = YPOS+1, y = Z4}
+      VD[3] = { x = XPOS+1, y = YPOS+1, y = Z3}
+
+      ComputeTextureUV(VD[1],0,0)
+      ComputeTextureUV(VD[2],0,1)
+      ComputeTextureUV(VD[3],1,1)
+      DrawToBuffer(VD)
+    end
+  end
+end
+\end{verbatim}
+
+
+%\intrentry{DLOADBYTES}{290}{2}
+
+%\textbf{Psuedocode:}
+%\begin{verbatim}
+%\end{verbatim}
+
+
+\intrentry{DMULDT}{294}{2}
+Multiplies \reg{Y} by time-step and writes it into \reg{X}. Used in frame-based mode to provide smooth animations.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+X = Y * TimerDT
+\end{verbatim}
+
+
+%\intrentry{DSMOOTH}{297}{2}
+%
+%\textbf{Psuedocode:}
+%\begin{verbatim}
+%\end{verbatim}
+
+
+\intrentry{DBEGIN}{298}{0}
+Starts asynchonous drawing. Used only in asynchronous thread.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+SetRenderTarget(1)
+\end{verbatim}
+
+
+\intrentry{DEND}{299}{0}
+Ends asynchonous drawing, and outputs the drawn image to screen.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+FlushBuffer()
+Copy(1,0)
+SetRenderTarget(2)
+\end{verbatim}
+
+
+%\intrentry{DROTATE}{300}{1}
+%
+%\textbf{Psuedocode:}
+%\begin{verbatim}
+%\end{verbatim}
+
+
+%\intrentry{DTRANSLATE}{301}{1}
+%
+%\textbf{Psuedocode:}
+%\begin{verbatim}
+%\end{verbatim}
+
+
+%\intrentry{DSCALE}{302}{1}
+%
+%\textbf{Psuedocode:}
+%\begin{verbatim}
+%\end{verbatim}
+
+
+\intrentry{DXTEXTURE}{303}{1}
+Binds a predefined texture. \reg{X} points to the string that contains texture name. If \reg{X} is equal to 0, texture will be unbound.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+if X > 0 then
+  NAME = VM:ReadString(X)
+  SetTexture(NAME)
+else
+  SetTexture(0)
+end
+\end{verbatim}

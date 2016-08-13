@@ -1,0 +1,1829 @@
+\newcommand{\intrentry}[3]{
+  \newpage
+  \subsection{#2 #1}
+  
+  \textbf{Mnemonic:} \texttt{#1} \ifthenelse{\number#3>0}{\texttt{X}}{}\ifthenelse{\number#3>1}{\texttt{,Y}}{} \\ \textbf{Encoding:} \texttt{#2} \ifthenelse{\number#3>0}{\texttt{RM [Segment1]}}{} \ifthenelse{\number#3>1}{\texttt{[Segment2]}}{} \ifthenelse{\number#3>0}{\texttt{[Constant1]}}{} \ifthenelse{\number#3>1}{\texttt{[Constant2]}}{}
+  
+  \vspace{0.4in}
+}
+
+\newcommand{\sintrentry}[3]{
+  \subsection{#2 #1}
+  
+  \textbf{Mnemonic:} \texttt{#1} \ifthenelse{\number#3>0}{\texttt{X}}{}\ifthenelse{\number#3>1}{\texttt{,Y}}{} \\ \textbf{Encoding:} \texttt{#2} \ifthenelse{\number#3>0}{\texttt{RM [Segment1]}}{} \ifthenelse{\number#3>1}{\texttt{[Segment2]}}{} \ifthenelse{\number#3>0}{\texttt{[Constant1]}}{} \ifthenelse{\number#3>1}{\texttt{[Constant2]}}{}
+  
+  \vspace{0.4in}  
+}
+
+
+\newcommand{\intrpriv}[0]{
+  This instruction is privileged, meaning it can only be executed from the code page which has runlevel of 0.
+  
+}
+
+\newcommand{\intrerror}[1]{
+  \ifthenelse{\number#1=3}{
+    May trigger error \reg{3} (division by zero) if the second operand was equal to zero.
+    
+  }{}
+  \ifthenelse{\number#1=6}{
+    May trigger error \reg{6} (stack overflow/underflow) if the stack pointer goes outside the allowable limits.
+    
+  }{}
+  \ifthenelse{\number#1=7}{
+    May trigger error \reg{7} (memory read/write fault) if the instruction was not able to perform a memory write/read operation due to an error.
+    
+  }{}
+  \ifthenelse{\number#1=11}{
+    May trigger error \reg{11} (page acccess violation) if the instruction attempts to access a page, and the target page runlevel is greater than the current page runlevel.
+    
+  }{}  
+  \ifthenelse{\number#1=14}{
+    May trigger error \reg{14} (execution access violation) if instruction execution moves into a restricted memory area when extended mode is enabled. See page \pageref{paging} for information about memory protection and paging.
+
+  }{}  
+}
+
+
+\chapter{Instruction Set Reference} \label{opcodelist}
+\section{ZCPU Instruction Set}
+This section describes the primary set of opcodes available in the ZCPU. Not all of these are present in ZGPU or ZSPU though. The following primary set instructions are not available in those architectures: \reg{SPG}, \reg{CPG}, \reg{HALT}, \reg{IRET}, \reg{STI}, \reg{CLI}, \reg{STEF}, \reg{CLEF}, \reg{EXTINT}, \reg{ERPG}, \reg{WRPG}, \reg{RDPG}, \reg{LIDTR}, \reg{EXTRET}, \reg{STM}, \reg{CLM}, \reg{SPP}, \reg{CPP}, \reg{SRL}, \reg{GRL}, \reg{SMAP}, \reg{GMAP}.
+
+
+\intrentry{STOP}{000}{0}
+Triggers interrupt \char`\#2 (equivalent to \reg{INT 2}). Will stop the processor execution if extended mode is not enabled.
+
+Used by the processor to detect end of program/invalid jump error, because this instruction is usually the result of invalid jump. Acts as \reg{NOP} if interrupts are disabled.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+Interrupt(2,0)
+\end{verbatim}
+
+
+\intrentry{JNE/JNZ}{001}{1}
+Jumps to the specified address if in previous comparsion two values were not equal to each other.
+
+Can also be used to check if result of the previous bit operation was not zero:
+\begin{verbatim}
+BIT EAX,2
+JNZ LABEL
+\end{verbatim}
+
+This code will jump to a label if the second bit is set to \reg{1}.
+
+\intrerror{14}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+if CMPR <> 0 then
+  Jump(X)
+end
+\end{verbatim}
+
+
+\intrentry{JMP}{002}{1}
+Unconditional jump to the specified address.
+
+\intrerror{14}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+Jump(X)
+\end{verbatim}
+
+
+\intrentry{JG/JNLE}{003}{1}
+Jumps to target address if the previous comparsion resulted in greater, or not less or equal result.
+
+\intrerror{14}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+if CMPR > 0 then
+  Jump(X)
+end
+\end{verbatim}
+
+
+\intrentry{JGE/JNL}{004}{1}
+Jumps to target address if the previous comparsion resulted in greater or equal, or not less result.
+
+\intrerror{14}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+if CMPR >= 0 then
+  Jump(X)
+end
+\end{verbatim}
+
+
+\intrentry{JL/JNGE}{005}{1}
+Jumps to target address if the previous comparsion resulted in less, or not greater or equal result.
+
+\intrerror{14}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+if CMPR < 0 then
+  Jump(X)
+end
+\end{verbatim}
+
+
+\intrentry{JLE/JNG}{006}{1}
+Jumps to target address if the previous comparsion resulted in less or equal, or not greater result.
+
+\intrerror{14}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+if CMPR <= 0 then
+  Jump(X)
+end
+\end{verbatim}
+
+
+\intrentry{JE/JZ}{007}{1}
+Jumps to the specified address if in previous comparsion two values were equal to each other.
+
+Can also be used to check if result of the previous bit operation was zero:
+\begin{verbatim}
+BIT EAX,2
+JZ LABEL
+\end{verbatim}
+
+This code will jump to a label if the second bit is set to \reg{0}.
+
+\intrerror{14}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+if CMPR <> 0 then
+  Jump(X)
+end
+\end{verbatim}
+
+
+\intrentry{CPUID}{008}{1}
+The \reg{CPUID} instruction will write various information about the processor itself into the \reg{EAX} register. This can be used to check for the processor capabilities.
+
+The first parameter passed into the instruction defines what kind of the information is required:
+
+\singlespacing
+\begin{longtable}{|c|p{3.5in}|} \hline
+Operand & Description \\ \hline
+0 & Processor version (current version: 10.00, reported as \reg{1000}) \\ \hline
+1 & Amount of internal RAM \\ \hline
+2 & Processor type \\ \hline
+3 & Amount of internal ROM \\ \hline
+\end{longtable}
+\onehalfspacing
+
+The result will be written into the \reg{EAX} register. Processor type can be one of the following:
+\singlespacing
+\begin{longtable}{|c|p{2.5in}|} \hline
+\reg{EAX} & Description \\ \hline
+0 & ZCPU \\ \hline
+1 & ZGPU beta version \\ \hline
+2 & ZSPU \\ \hline
+3 & ZGPU \\ \hline
+\end{longtable}
+\onehalfspacing
+
+%The following processor versions are possible (if processor type is \reg{ZCPU}, listed by date):
+%\singlespacing
+%\begin{longtable}{|c|p{2.5in}|} \hline
+%\reg{EAX} & Version & Capabilities \\ \hline
+%1000  & 10.0       & Described in this handbook \\ \hline
+%990   & 10.0 alpha & Lacks ability to place page table in RAM, lacks microcode caching, lacks \reg{ENTER}, \reg{LEAVE}, \reg{STM}, \reg{CLM} instructions \\ \hline
+%900   & 9.0        & Lacks \reg{PPAGE} register, lacks hardware debug mode, lacks internal timer, no permissions check when execution crosses page boundary \\ \hline
+%890   & 9.0 alpha  & Erratic behaviour of \reg{VCROSS} instruction under \reg{VMODE} 3 \\ \hline
+%\end{longtable}
+%\onehalfspacing
+%(no older information currently available)
+\textbf{Psuedocode:}
+\begin{verbatim}
+EAX = CPUID[X]
+\end{verbatim}
+
+
+\intrentry{PUSH}{009}{1}
+Pushes a value to the processor stack (see page \pageref{stack} for more information on the processor stack). Will check for interrupt overflow by comparing the new stack pointer to zero.
+
+Uses the \reg{ESP} register as the stack pointer, and the \reg{ESZ} register as the stack size pointer.
+
+Example of use:
+\begin{verbatim}
+PUSH 10
+PUSH 20
+
+POP EAX //EAX is now 20
+\end{verbatim}
+
+\intrerror{6}
+\intrerror{7}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+MEMORY[ESP+SS] = X
+ESP = ESP - 1
+
+if ESP < 0 then
+  ESP = 0
+  Interrupt(6,ESP)
+end
+\end{verbatim}
+
+
+\intrentry{ADD}{010}{2}
+Adds two values together, and writes the result to the first operand.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+X = X + Y
+\end{verbatim}
+
+
+\intrentry{SUB}{011}{2}
+Subtracts second operand from the first one, and writes the result to the first operand.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+X = X - Y
+\end{verbatim}
+
+
+\intrentry{MUL}{012}{2}
+Muliplies two values together, and writes the result to the first operand.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+X = X * Y
+\end{verbatim}
+
+
+\intrentry{DIV}{013}{2}
+Divides the first operand by the second operand, and writes the result to the first operand. Checks for the division by zero error.
+
+\intrerror{3}
+
+Will not trigger division by zero error if interrupt flag register \reg{IF} is set to 0.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+if Y <> 0 then
+  X = X / Y
+else
+  Interrupt(3,0)
+end
+\end{verbatim}
+
+
+\intrentry{MOV}{014}{2}
+Copies the contents of the second operand to the first operand.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+X = Y
+\end{verbatim}
+
+
+\intrentry{CMP}{015}{2}
+Compares the two operands together, and remembers the result of this comparsion.
+
+This instruction is used in conjunction with the conditional branching instructions (see \pageref{branching}), for example:
+\begin{verbatim}
+CMP EAX,EBX
+JG  LABEL1 //Jump if EAX >  EBX
+JLE LABEL2 //Jump if EAX <= EBX
+JE  LABEL3 //Jump if EAX  = EBX
+\end{verbatim}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+CMPR = X - Y
+\end{verbatim}
+
+
+\intrentry{MIN}{018}{2}
+Finds the smaller of the two values, and writes it to the first operand. For example:
+\begin{verbatim}
+MOV EAX,100
+MOV EBX,200
+MIN EBX,EAX //Sets EBX to 100
+\end{verbatim}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+if X > Y then
+  X = Y
+end
+\end{verbatim}
+
+
+\intrentry{MAX}{019}{2}
+Finds the bigger of the two values, and writes it to the first operand. For example:
+\begin{verbatim}
+MOV EAX,100
+MOV EBX,200
+MAX EAX,EBX //Sets EAX to 200
+\end{verbatim}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+if X < Y then
+  X = Y
+end
+\end{verbatim}
+
+
+\intrentry{INC}{020}{1}
+Increments the target operand by one. For example:
+\begin{verbatim}
+MOV EAX,100
+INC EAX //EAX is now 101
+\end{verbatim}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+X = X + 1
+\end{verbatim}
+
+
+\intrentry{DEC}{021}{1}
+Decrements the target operand by one. For example:
+\begin{verbatim}
+MOV EAX,100
+DEC EAX //EAX is now 99
+\end{verbatim}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+X = X - 1
+\end{verbatim}
+
+
+\intrentry{NEG}{022}{1}
+Negates the target operand (changes its sign). For example:
+\begin{verbatim}
+MOV EAX,123
+NEG EAX //EAX is now -123
+
+MOV EBX,0
+NEG EBX //EBX is now -0, signed zero
+\end{verbatim}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+X = -X
+\end{verbatim}
+
+
+\intrentry{RAND}{023}{1}
+Generates a random value between 0.0 and 1.0. The random seed is automatically generated by the processor hardware.
+
+Range inclusive of 0.0 and 1.0.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+X = RANDOM(0.0,1.0)
+\end{verbatim}
+
+
+\intrentry{LOOP}{024}{1}
+Performs a conditional jump to a certain label as long as ECX does not equal zero. Is usually used for creating loops in programs:
+\begin{verbatim}
+MOV ECX,100;
+LABEL:
+  <...>
+LOOP ECX; //Repeats 100 times
+\end{verbatim}
+
+Will only terminate when ECX is equal to zero.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+if ECX <> 0 then
+  ECX = ECX - 1
+  IP = X
+end
+\end{verbatim}
+
+
+\intrentry{LOOPA}{025}{1}
+Performs a conditional jump to a certain label as long as EAX does not equal zero. Is usually used for creating loops in programs:
+\begin{verbatim}
+MOV EAX,100;
+LABEL:
+  <...>
+LOOP EAX; //Repeats 100 times
+\end{verbatim}
+
+Will only terminate when EAX is equal to zero. Similar to the \reg{LOOP} instruction.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+if EAX <> 0 then
+  EAX = EAX - 1
+  IP = X
+end
+\end{verbatim}
+
+
+\intrentry{LOOPB}{026}{1}
+Performs a conditional jump to a certain label as long as EBX does not equal zero. Is usually used for creating loops in programs:
+\begin{verbatim}
+MOV EBX,100;
+LABEL:
+  <...>
+LOOP EBX; //Repeats 100 times
+\end{verbatim}
+
+Will only terminate when EBX is equal to zero. Similar to the \reg{LOOP} instruction.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+if EBX <> 0 then
+  EBX = EBX - 1
+  IP = X
+end
+\end{verbatim}
+
+
+\intrentry{LOOPD}{027}{1}
+Performs a conditional jump to a certain label as long as EDX does not equal zero. Is usually used for creating loops in programs:
+\begin{verbatim}
+MOV EDX,100;
+LABEL:
+  <...>
+LOOP EDX; //Repeats 100 times
+\end{verbatim}
+
+Will only terminate when EDX is equal to zero. Similar to the \reg{LOOP} instruction.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+if EDX <> 0 then
+  EDX = EDX - 1
+  IP = X
+end
+\end{verbatim}
+
+
+\intrentry{SPG}{028}{1}
+Makes the specific page read-only. It will clear the write flag of the page specified by the operand, and also set the read flag of the page specified by the operand. See page \pageref{paging} for more information on the paging system.
+
+Example of use:
+\begin{verbatim}
+SPG 1 //Set addresses 128..255 read-only
+SPG 2 //Set addresses 256..511 read-only
+
+CPG 1 //Make the 128..255 range writeable again
+\end{verbatim}
+
+\intrerror{11}
+
+\intrpriv
+
+In case of an error it will pass the target page number as an interrupt parameter.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+if CurrentPage.Runlevel < Page[X].Runlevel then
+  Page[X].Read = 1
+  Page[X].Write = 0
+else
+  Interrupt(11,X)
+end
+\end{verbatim}
+
+
+\intrentry{CPG}{029}{1}
+Makes the specific page readable and writeable. It will set the write flag of the page specified by the operand, and also set the read flag of the page specified by the operand. See page \pageref{paging} for more information on the paging system.
+
+Example of use:
+\begin{verbatim}
+SPG 1 //Set addresses 128..255 read-only
+SPG 2 //Set addresses 256..511 read-only
+
+CPG 1 //Make the 128..255 range writeable again
+\end{verbatim}
+
+\intrerror{11}
+
+\intrpriv
+
+In case of an error it will pass the target page number as an interrupt parameter.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+if CurrentPage.Runlevel < Page[X].Runlevel then
+  Page[X].Read = 1
+  Page[X].Write = 1
+else
+  Interrupt(11,X)
+end
+\end{verbatim}
+
+
+\intrentry{POP}{030}{1}
+Pops a value off the processor stack (see page \pageref{stack} for more information on the processor stack). Will check for underflow by comparing the new stack pointer to the stack size register.
+
+Uses the \reg{ESP} register as the stack pointer, and the \reg{ESZ} register as the stack size pointer.
+
+Example of use:
+\begin{verbatim}
+PUSH 10
+PUSH 20
+
+POP EAX //EAX is now 20
+\end{verbatim}
+
+\intrerror{6}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+ESP = ESP + 1
+if ESP > ESZ then
+  ESP = ESZ
+  Interrupt(6,ESP)
+end
+\end{verbatim}
+
+
+\intrentry{CALL}{031}{1}
+Calls a subroutine of the program. The subroutine will return to this point of execution by executing the \reg{RET} instruction.
+
+This instruction pushes the current instruction pointer to stack, and will restore it upon executing the \reg{RET} instruction. Any damage to the stack data might cause subroutine to fail to return to the original calling point.
+
+The opcode may trigger stack-related errors.
+
+For example:
+\begin{verbatim}
+CALL SUBROUTINE0;
+CALL SUBROUTINE1;
+
+SUBROUTINE0:
+  <...>
+RET
+
+SUBROUTINE1:
+  <...>
+  CALL SUBROUTINE0;
+RET
+\end{verbatim}
+
+\intrerror{6}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+Push(IP)
+if NoInterrupts then
+  IP = X
+end
+\end{verbatim}
+
+
+\intrentry{BNOT}{032}{1}
+Toggles all bits in the number. The number of bits affected by the operation depend on the current setting of the \reg{BPREC} register (binary precision).
+
+For example:
+\begin{verbatim}
+CPUSET 50,8 //Set 8-bit precision
+
+MOV EAX,1
+BNOT EAX //EAX is now 254
+\end{verbatim}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+X = NOT X
+\end{verbatim}
+
+
+\intrentry{FINT}{033}{1}
+Rounds down the value. Will round down to the lower integer:
+\begin{verbatim}
+MOV EAX,1.9
+FINT EAX //EAX = 1.0
+
+MOV EAX,4.21
+FINT EAX //EAX = 4.0
+
+MOV EAX,1520.101
+FINT EAX //EAX = 1520.0
+\end{verbatim}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+X = FLOOR(X)
+\end{verbatim}
+
+
+\intrentry{FRND}{034}{1}
+Rounds the value to the nearest integer:
+\begin{verbatim}
+MOV EAX,1.9
+FRND EAX //EAX = 2.0
+
+MOV EAX,4.21
+FRND EAX //EAX = 4.0
+
+MOV EAX,1520.101
+FRND EAX //EAX = 1520.0
+\end{verbatim}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+X = ROUND(X)
+\end{verbatim}
+
+
+\intrentry{FFRAC}{035}{1}
+Returns the fractional value of the operand:
+\begin{verbatim}
+MOV EAX,1.9
+FRND EAX //EAX = 0.9
+
+MOV EAX,4.21
+FRND EAX //EAX = 0.21
+
+MOV EAX,1520.101
+FRND EAX //EAX = 0.101
+\end{verbatim}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+X = FRAC(X)
+\end{verbatim}
+
+
+\intrentry{FINV}{036}{1}
+Finds the inverse of the operand. Checks for the division by zero error.
+
+\intrerror{3}
+
+Will not trigger division by zero error if interrupt flag register \reg{IF} is set to 0.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+if X <> 0 then
+  X = 1 / X
+else
+  Interrupt(3,1)
+end
+\end{verbatim}
+
+
+\intrentry{FSHL}{038}{1}
+Performs an arithmetic shift-left by multiplying the input number by two. The result might be a floating-point value:
+\begin{verbatim}
+MOV EAX,100
+FSHR EAX //EAX = 200
+
+MOV EAX,8
+FSHR EAX //EAX = 16
+
+MOV EAX,4.2
+FSHR EAX //EAX = 8.2
+\end{verbatim}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+X = X * 2
+\end{verbatim}
+
+
+\intrentry{FSHR}{039}{1}
+Performs an arithmetic shift-right by dividing the input number by two. The result might be a floating-point value:
+\begin{verbatim}
+MOV EAX,100
+FSHR EAX //EAX = 50
+
+MOV EAX,8
+FSHR EAX //EAX = 4
+
+MOV EAX,4.2
+FSHR EAX //EAX = 2.1
+\end{verbatim}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+X = X / 2
+\end{verbatim}
+
+
+\intrentry{RET}{040}{0}
+Returns from a subroutine previous called by \reg{CALL} instruction. This instruction will pop a value off the stack, and use it as a return address.
+
+It can be used for creating subroutines:
+\begin{verbatim}
+CALL SUBROUTINE0;
+CALL SUBROUTINE1;
+
+SUBROUTINE0:
+  <...>
+RET
+
+SUBROUTINE1:
+  <...>
+  CALL SUBROUTINE0;
+RET
+\end{verbatim}
+
+\intrerror{6}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+IP = POP()
+\end{verbatim}
+
+
+\intrentry{IRET}{041}{0}
+Returns from an interrupt call. This instruction is very similar to the \reg{RET} instruction, except it restores both the code segment \reg{CS} and the instruction pointer \reg{IP}. It will pop both values off the stack.
+
+The code segment that will be restored correspond to the code segment that the execution was in when the interrupt occured. It is \emph{not} affected by the \reg{IF} flag (interrupt flag).
+
+For example, a typical interrupt body would be:
+\begin{verbatim}
+INTERRUPT_HANDLER:
+  <...>
+IRET;
+\end{verbatim}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+if EF = 0 then
+  IP = Pop()
+end
+if EF = 1 then
+  CS = Pop()
+  IP = Pop()
+end
+\end{verbatim}
+
+
+\intrentry{STI}{042}{0}
+Set interrupt flag \reg{IF} to 1 \emph{after the next instruction}. This will enable triggering the interrupts (without the \reg{IF} flag interrupts are ignored).
+
+The delay of one instruction is so it would be possible to combine \reg{STI} instruction with an \reg{IRET} or \reg{EXTRET} instruction to provide an atomic interrupt handler (preventing any other interrupts from happening during this interrupt). It's most efficiently used to prevent external interrupts from happening.
+
+For example:
+\begin{verbatim}
+INTERRUPT_HANDLER:
+  CLI;
+  <...>
+  STI;
+EXTRET;
+\end{verbatim}
+
+\intrpriv
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+NextIF = 1
+\end{verbatim}
+
+
+\intrentry{CLI}{043}{0}
+Clears the interrupt flag \reg{IF}. This will prevent any interrupts from being triggered, and the errors raised by the processor will be ignored. The interrupts can be turned back on using the \reg{STI} instruction.
+
+\intrpriv
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+IF = 0
+\end{verbatim}
+
+
+\intrentry{RETF}{047}{0}
+Performs a return from a far subroutine call via the \reg{CALLF} instruction. Works similarly to the \reg{IRET} instruction, but does not check for the extended mode.
+
+Will set code segment and instruction pointer to values popped off the stack.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+CS = Pop()
+IP = Pop()
+\end{verbatim}
+
+\intrentry{STEF}{048}{0}
+Enable the extended mode of the processor. This mode will enable the interrupt table support, and permission checks for the paging system.
+
+The paging system is independant of the extended mode, and can function with or without the extended mode enabled.
+
+It's possible to disable the extended mode by using the \reg{CLEF} instruction.
+
+\intrpriv
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+EF = 1
+\end{verbatim}
+
+
+\intrentry{CLEF}{049}{0}
+Disables the extended mode which was enabled by the \reg{STEF} instruction. This will disable interrupt table, and disable the permission checks in the paging system.
+
+The paging system is independant of the extended mode, and can function with or without the extended mode enabled.
+
+\intrpriv
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+EF = 0
+\end{verbatim}
+
+
+\intrentry{AND}{050}{2}
+Performs a logical AND operation on the two operands, and writes the result back to the first operand. The result will be 1 if both operands are greater or equal to 1.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+X = X AND Y
+\end{verbatim}
+
+
+\intrentry{OR}{051}{2}
+Performs a logical OR operation on the two operands, and writes the result back to the first operand. The result will be 1 if either of the operands is greater or equal to 1.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+X = X OR Y
+\end{verbatim}
+
+
+\intrentry{XOR}{052}{2}
+Performs a logical XOR operation on the two operands, and writes the result back to the first operand. The result will be 1 if just one of operands is greater or equal to 1 (but not two of them at once).
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+X = X XOR Y
+\end{verbatim}
+
+
+\intrentry{FSIN}{053}{2}
+Finds sine of the second operand, and writes it into the first operand.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+X = Sin(Y)
+\end{verbatim}
+
+
+\intrentry{FCOS}{054}{2}
+Finds cosine of the second operand, and writes it into the first operand.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+X = Cos(Y)
+\end{verbatim}
+
+
+\intrentry{FTAN}{055}{2}
+Finds tangent of the second operand, and writes it into the first operand.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+X = Tan(Y)
+\end{verbatim}
+
+
+\intrentry{FASIN}{056}{2}
+Finds arcsine of the second operand, and writes it into the first operand.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+X = ArcSin(Y)
+\end{verbatim}
+
+
+\intrentry{FACOS}{057}{2}
+Finds arccosine of the second operand, and writes it into the first operand.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+X = ArcCos(Y)
+\end{verbatim}
+
+
+\intrentry{FATAN}{058}{2}
+Finds arctangent of the second operand, and writes it into the first operand.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+X = ArcTan(Y)
+\end{verbatim}
+
+
+\intrentry{MOD}{059}{2}
+Finds a remainder after the first operand was divided by the second operand, and returns the result to the first operand. If the input is a floating-point value, then it will return the value of $X - n * Y$, where $n$ is the quotient of $X / Y$, rounded toward zero to an integer.
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+X = X FMOD Y
+\end{verbatim}
+
+
+\intrentry{BIT}{060}{2}
+Tests whether specific bit is set in the given number, and writes the result to the \reg{CMPR} register. It's possible to check the result of this operation using the conditional branching opcodes (see pages \pageref{branchbit}, \pageref{bitwiseops}):
+\begin{verbatim}
+BIT EAX,4 //Test 5th bit of EAX
+JZ  LABEL1 //Jump if 5th bit is 0
+JNZ LABEL1 //Jump if 5th bit is 1
+\end{verbatim}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+CMPR = Yth bit of X
+\end{verbatim}
+
+
+\intrentry{SBIT}{061}{2}
+Sets specific bit of the first operand (see page \pageref{bitwiseops}):
+\begin{verbatim}
+MOV EAX,105 //1101001
+SBIT EAX,1
+//EAX = 107   1101011
+\end{verbatim}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+Yth bit of X = 1
+\end{verbatim}
+
+
+\intrentry{CBIT}{062}{2}
+Clears specific bit of the first operand (see page \pageref{bitwiseops}):
+\begin{verbatim}
+MOV EAX,107 //1101011
+CBIT EAX,6
+//EAX = 43    0101011
+\end{verbatim}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+Yth bit of X = 0
+\end{verbatim}
+
+
+\intrentry{TBIT}{063}{2}
+Toggles specific bit of the first operand (see page \pageref{bitwiseops}):
+\begin{verbatim}
+MOV EAX,43 //0101011
+TBIT EAX,0
+//EAX = 42   0101010
+\end{verbatim}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+Yth bit of X = 1 - Yth bit of X
+\end{verbatim}
+
+
+\intrentry{BAND}{064}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+
+
+\intrentry{BOR}{065}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+
+
+\intrentry{BXOR}{066}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+
+
+\intrentry{BSHL}{067}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+
+
+\intrentry{BSHR}{068}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+
+
+\intrentry{JMPF}{069}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{CS = Y; IP = X}
+
+
+\intrentry{EXTINT}  {070}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{Call an external interrupt}
+
+
+\intrentry{CNE}{071}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{IF CMPR <> 0 THEN CALL(X) END}
+
+
+\intrentry{CNZ}{071}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{IF CMPR <> 0 THEN CALL(X) END}
+
+
+\intrentry{CG}{073}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{IF CMPR > 0 THEN CALL(X) END}
+
+
+\intrentry{CNLE}{073}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{IFNOT CMPR <= 0 THEN CALL(X) END}
+
+
+\intrentry{CGE}{074}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{IF CMPR >=0 THEN CALL(X) END}
+
+
+\intrentry{CNL}{074}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{IFNOT CMPR < 0 THEN CALL(X) END}
+
+
+\intrentry{CL}      {075}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{IF CMPR < 0 THEN CALL(X) END}
+
+
+\intrentry{CNGE}{075}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{IFNOT CMPR >= 0 THEN CALL(X) END}
+
+
+\intrentry{CLE}{076}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{IF CMPR <= 0 THEN CALL(X) END}
+
+
+\intrentry{CNG}{076}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{IFNOT CMPR > 0 THEN CALL(X) END}
+
+
+\intrentry{CE}      {077}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{IF CMPR = 0 THEN CALL(X) END}
+
+
+\intrentry{CZ}      {077}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{IF CMPR = 0 THEN CALL(X) END}
+
+
+\intrentry{MCOPY}   {078}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{Copy X bytes from absolute pointer ESI to absolute pointer EDI}
+
+
+\intrentry{MCOPY}   {078}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{FOR I = 1 TO X DO MEMORY[EDI] = MEMORY[ESI]; ESI++; EDI++; END}
+
+
+\intrentry{MXCHG}{079}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{Swap X bytes bewteen two blocks at absolute pointer ESI and absolute pointer EDI}
+
+
+\intrentry{MXCHG}   {079}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{FOR I = 1 TO X DO TEMP = MEMORY[EDI]; MEMORY[EDI] = MEMORY[ESI]; MEMORY[ESI] = TEMP; ESI++; EDI++; END}
+
+
+\intrentry{FPWR}{080}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = X xor Y}
+
+
+\intrentry{XCHG}{081}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X,Y = Y,X}
+
+
+\intrentry{FLN}{082}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = LN(Y)}
+
+
+\intrentry{FLOG10}  {083}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = LOG10(Y)}
+
+
+\intrentry{IN}      {084}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = PORT[Y]}
+
+
+\intrentry{OUT}{085}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{PORT[X] = Y}
+
+
+\intrentry{FABS}{086}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = ABS(Y)}
+
+
+\intrentry{FSGN}{087}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = SIGN(Y)}
+
+
+\intrentry{FEXP}{088}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = EXP(Y)}
+
+
+\intrentry{CALLF}   {089}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{IF PUSH(CS) AND PUSH(IP) THEN CS = Y; IP = X; END}
+
+
+\intrentry{FPI}{090}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = PI}
+
+
+\intrentry{FE}      {091}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = E}
+
+
+\intrentry{INT}{092}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{INTERRUPT(X)}
+
+
+\intrentry{TPG}{093}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{Tests whether page X is readable, see notes. Sets CMPR to 1 on success, 0 on failure.}
+
+
+\intrentry{FCEIL}   {094}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = CEIL(X)}
+
+
+\intrentry{ERPG}{095}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{Erases page X from internal ROM}
+
+
+\intrentry{WRPG}{096}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{Writes page X to internal ROM}
+
+
+\intrentry{RDPG}{097}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{Reads page X from internal ROM}
+
+
+\intrentry{TIMER}   {098}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = TIMER}
+
+
+\intrentry{LIDTR}   {099}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{IDTR = X}
+
+
+\intrentry{JNER}{101}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{IF CMPR <> 0 THEN IP = IP+X END}
+
+
+\intrentry{JNZR}{101}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{IF CMPR <> 0 THEN IP = IP+X END}
+
+
+\intrentry{JMPR}{102}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{IP = IP+X}
+
+
+\intrentry{JGR}{103}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{IF CMPR > 0 THEN IP = IP+X END}
+
+
+\intrentry{JNLER}   {103}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{IFNOT CMPR <= 0 THEN IP = IP+X END}
+
+
+\intrentry{JGER}{104}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{IF CMPR >=0 THEN IP = IP+X END}
+
+
+\intrentry{JNLR}{104}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{IFNOT CMPR < 0 THEN IP = IP+X END}
+
+
+\intrentry{JLR}{105}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{IF CMPR < 0 THEN IP = IP+X END}
+
+
+\intrentry{JNGER}   {105}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{IFNOT CMPR >= 0 THEN IP = IP+X END}
+
+
+\intrentry{JLER}{106}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{IF CMPR <= 0 THEN IP = IP+X END}
+
+
+\intrentry{JNGR}{106}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{IFNOT CMPR > 0 THEN IP = IP+X END}
+
+
+\intrentry{JER}{107}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{IF CMPR = 0 THEN IP = IP+X END}
+
+
+\intrentry{JZR}{107}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{IF CMPR = 0 THEN IP = IP+X END}
+
+
+\intrentry{LNEG}{108}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = 1-CLAMP(X,0,1))}
+
+
+\intrentry{EXTRET}  {110}{0}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{Return from an external interrupt}
+
+
+\intrentry{IDLE}{111}{0}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{IDLE = 1}
+
+
+\intrentry{NOP}{112}{0}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{Does nothing}
+
+
+\intrentry{PUSHA}   {114}{0}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{Push all GP registers}
+
+
+\intrentry{POPA}{115}{0}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{Pop all GP registers}
+
+
+\intrentry{STD2}{116}{0}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{Enable hardware debug mode}
+
+
+\intrentry{LEAVE}   {117}{0}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{ESP = EBP - 1; EBP = POP()}
+
+
+\intrentry{STM}{118}{0}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{MF = 1}
+
+
+\intrentry{CLM}{119}{0}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{MF = 0}
+
+
+\intrentry{CPUGET}  {120}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = CPU\textunderscore REGISTER[Y]}
+
+
+\intrentry{CPUSET}  {121}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{CPU\textunderscore REGISTER[X] = Y}
+
+
+\intrentry{SPP}{122}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{PAGE[X].Y = 1}
+
+
+\intrentry{CPP}{123}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{PAGE[X].Y = 0}
+
+
+\intrentry{SRL}{124}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{PAGE[X].RunLevel = Y}
+
+
+\intrentry{GRL}{125}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = PAGE[Y].RunLevel}
+
+
+\intrentry{LEA}{126}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{Loads address of second operand. Returns second operand if it is not a memory reference}
+
+
+\intrentry{BLOCK}   {127}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{BLOCK\textunderscore START = X; BLOCK\textunderscore END = Y}
+
+
+\intrentry{CMPAND}  {128}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{IF CMPR <> 0 THEN CMPR = X - Y END}
+
+
+\intrentry{CMPOR}   {129}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{IF CMPR = 0 THEN CMPR = X - Y END}
+
+
+\intrentry{MSHIFT}  {130}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{Shift X bytes by Y positions (positive shifts left) at absolute pointer ESI}
+
+
+\intrentry{SMAP}{131}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{PAGE[X].MappedTo = Y}
+
+
+\intrentry{GMAP}{132}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = PAGE[Y].MappedTo}
+
+
+\intrentry{RSTACK}  {133}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = MEMORY[SS+Y]}
+
+
+\intrentry{SSTACK}  {134}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{MEMORY[SS+X] = Y}
+
+
+\intrentry{ENTER}   {135}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{PUSH(EBP); EBP = ESP + 1; ESP = ESP - X}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\intrentry{VADD}{250}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = X + Y}
+
+
+\intrentry{VSUB}        {251}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = X - Y}
+
+
+\intrentry{VMUL}        {252}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = X * SCALAR Y}
+
+
+\intrentry{VDOT}        {253}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = X . Y}
+
+
+\intrentry{VCROSS}      {254}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = X x Y}
+
+
+\intrentry{VMOV}        {255}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = Y}
+
+
+\intrentry{VNORM}       {256}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = NORMALIZE(Y)}
+
+
+\intrentry{VCOLORNORM}  {257}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = COLOR\textunderscore NORMALIZE(Y)}
+
+
+\intrentry{LOOPXY}      {259}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+
+IF EDX > 0 THEN\newline
+  IP = X\newline
+  IF ECX > 0 THEN\newline
+    ECX = ECX - 1\newline
+  ELSE\newline
+    EDX = EDX - 1\newline
+    ECX = Y\newline
+  END\newline
+END
+
+
+\intrentry{MADD}        {260}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = X + Y}
+
+
+\intrentry{MSUB}        {261}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = X - Y}
+
+
+\intrentry{MMUL}        {262}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = X * Y}
+
+
+\intrentry{MROTATE}{263}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = ROT(Y)}
+
+
+\intrentry{MSCALE}      {264}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{2}{X = SCALE(Y)}
+
+
+\intrentry{MPERSPECTIVE}{265}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{2}{X = PERSP(Y)}
+
+
+\intrentry{MTRANSLATE}  {266}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%X = TRANS(Y)}
+
+
+\intrentry{MLOOKAT}{267}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = LOOKAT(Y)}
+
+
+\intrentry{MMOV}        {268}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = Y}
+
+
+\intrentry{VLEN}        {269}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = Sqrt(Y . Y)}
+
+
+\intrentry{MIDENT}      {270}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = IDENTITY()}
+
+
+\intrentry{VMODE}       {273}{1}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{Vector mode = Y}
+
+
+\intrentry{VDIV}        {295}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = X / Y}
+
+
+\intrentry{VTRANSFORM}  {296}{2}
+
+\textbf{Psuedocode:}
+\begin{verbatim}
+\end{verbatim}
+%{X = X * Y}
+

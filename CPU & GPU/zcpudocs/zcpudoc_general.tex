@@ -1,0 +1,134 @@
+\chapter{Computer Engineering Theory}
+This chapter should give you some idea about basic concepts of computer engineering, and the typical concepts it makes use of.
+
+
+
+
+
+
+
+\section{Bits and Numbers}
+There are different kinds of numbers - the most obvious example of different kinds of numbers are the \emph{natural} numbers (we use these numbers for counting objects - one apple, ten trees, etc), the \emph{real} numbers (these include fractions and all other non-integer numbers).
+
+The natural numbers have limited use - it is hard to express fractional quantities by using natural numbers, and it becomes even worse if you attempt to perform arithmetics on that. This might not seem like a life problem - but some people have spent more than 10 years calculating just a few digits of $\pi$.
+
+\emph{Computers} are the devices created by people which make arithmetic computations faster and easier to perform. But the initial problem that the computer engineers had to face was the complexity of implementing both the natural and the real numbers.
+
+At first it seems that real and natural numbers could be well represented by gears and rotating mechanics - but this approach did not give mathematicans and physicists the precision they required in their calculations. Besides, the calculations could be much faster if they were performed electronically.
+
+There is a way to represent real numbers in electronics - using so called analog computers. In these computers the voltage level would be somehow proportional to the numbers used in the calculation. But there was the precision problem again: it is not possible to reliably measure the voltage levels.
+
+The next invention was the introduction of the non-decimal numeric systems - the kind of systems where number is represented by more or less than 10 symbols. For example the ternary system, which only uses symbols '0', '1', '2' to represent numbers, or the binary system that uses two symbols (typically '0' and '1', or 'true' and 'false'). This means that numbers could be represented with fewer mechanics and electronics.
+
+A binary mechanical calculator would only require a single two-state switch. A binary electronic computer could only require two voltages: high voltage and low voltage, corresponding to '0' and '1'. The reduction in complexity gave major benefits, and also gave birth to the digital computers.
+
+(missing text: binary system)
+
+
+
+
+
+
+
+\section{Boolean Logic}
+As part of its evolution mathematics has attempted to describe rules of basic logic, giving a formal description to all the common approaches people use for solving logic tasks.
+
+This gave birth to boolean logic - a formal description that introduces a new kind of number, and new rules to work with it. The new kind of number is the boolean value - unlike the common numbers it only has two values. These values are commonly referred to as 'true' and 'false', or alternatively '1' and '0'.
+
+The boolean logic is inseparatable from the computer engineering - all modern computers make use of the binary system, and it's vital to understand what kind of useful things can be done with the binary numbers.
+
+There are few basic operations that can be performed on the boolean values:
+\begin{enumerate}
+	\item 'Or', which is somehow similar to '+' operation used on the usual numbers.
+	\item 'And', which is similar to the multiplication ('*') operation.
+	\item 'Not', the kind of a logic '-' (negation, not subtraction).
+	\item 'Exclusive or', which is also similar to '+' operation, but with a quirk that will be explained below.
+\end{enumerate}
+
+It's very easy to illustrate properties of these operations by an example. The first line is the boolean logic example, and the lower line is the corresponding example from normal arithmetics:
+
+$A or B$ is true if either A or B is true.
+$A + B$ is non-zero if either A or B is not zero.
+
+$A and B$ is true if both A and B are true.
+$A * B$ is non-zero if both A and B are non-zero.
+
+$not A$ is true when A is false, and vice-versa.
+$-A$ is negative when A is positive, and vice-versa.
+
+$A xor B$ is true if \emph{either} A \emph{or} B is true. It's false if they are both false, or both true.
+$(A + B) mod 2$ (addition with modulus by 2).
+
+
+
+
+
+
+
+\section{Electric Circuits}
+All the modern computers make use of the electric circuits to perform the actual calculations. To gain a complete understanding of the computer the basic electric circuits theory must be known.
+
+It's a common knowledge that a certain voltage causes a current to flow - this is not nearly enough to build a working computer though. As it was mentoined earlier all modern computers are digital, and use two voltage levels (that means they work in binary).
+
+Two different voltage levels means that we must notice two things:
+\begin{enumerate}
+	\item Two different voltages will make two different currents run through our circuit (\emph{the current running through circuit must be controlled})
+	\item A device that could control current or voltage must be created (\emph{it makes no difference whether you control current or you control voltage in the circuit - it's essentially the same thing}
+\end{enumerate}
+
+As we just noticed the current running through our circuit will change - that means we will have to deal with something like alternating circuits, but not exactly.
+
+Alternating current is the kind of electric current that changes periodically, for example the common power outlets feed the current that changes its direction 50-60 times per second.
+
+(insert more info about electronics).
+
+The second thing we've noticed is that we need to create a kind of device that could control current running through it. Such device exists - in fact many of them exist, but the most commonly known one is the \emph{semiconducting transistor}. Its special electric properties allow to control current running through it by feeding another (much much smaller) current through it.
+
+The transistor allows to implement all the basic boolean logic in an electric circuit. It is possible to construct electric circuits for all the basic boolean operations. These circuits can then be used as construction blocks for more complex devices - such as processors, controllers, etc.
+
+
+
+
+
+
+\section{Processors}
+
+
+
+
+
+
+
+\section{Digital Computer Architectures}
+
+
+
+
+
+
+
+\section{Modern Computer}
+
+
+
+
+
+
+
+\section{Spacecraft Computer Control}
+
+
+
+
+
+
+
+\section{Operating Systems}
+
+
+
+
+
+
+
+\section{Software Engineering}
