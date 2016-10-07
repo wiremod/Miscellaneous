@@ -1,6 +1,5 @@
-# Documentation
-Documentation regarding wiremod
+# Miscellaneous
 
-Not a whole lot to say really. Documentation!
+Note: This repo WAS named "Documentation.
 
-See license file for license information.
+This repo is for any extra stuff related to wiremod that doesn't fit in other repositories or wikis.
