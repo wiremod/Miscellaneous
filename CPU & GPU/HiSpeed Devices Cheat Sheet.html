@@ -1,0 +1,570 @@
+
+<!-- saved from url=(0032)http://immibis.com/wiremod_hscs/ -->
+<html xmlns="http://www.w3.org/1999/xhtml"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+<title>HiSpeed Devices Cheat Sheet</title>
+<link href="./HiSpeed Devices Cheat Sheet_files/web.css" rel="stylesheet" type="text/css">
+</head>
+<body class="vsc-initialized">
+<div id="head">
+  <h1> HiSpeed Devices Cheat Sheet </h1>
+</div>
+<div id="left">
+  <div class="box">
+    <h2 style="background: #3671c6;">CPU</h2>
+    <table border="0" class="blue">
+      <tbody><tr>
+        <td>CPU Documentation</td>
+        <td><a href="http://www.wiremod.com/forum/cpu-tutorials-programs/151-documentation.html">http://www.wiremod.com/forum/cpu-tutorials-programs/151-documentation.html</a></td>
+      </tr>
+      <tr class="alt">
+        <td>Last Memory Adress</td>
+        <td>65535</td>
+      </tr>
+    </tbody></table>
+  </div>
+  <div class="box">
+    <h2 style="background: #23A553;">Consolescreen</h2>
+    <table border="0" class="green">
+      <tbody><tr>
+        <td>Force cache refresh </td>
+        <td>2020</td>
+      </tr>
+      <tr class="alt">
+        <td>Cached blocks size (up to 28, 0 if disabled) </td>
+        <td>2021</td>
+      </tr>
+      <tr>
+        <td>Screen ratio (read only) </td>
+        <td>2022</td>
+      </tr>
+      <tr class="alt">
+        <td>Hardware scale </td>
+        <td>2023</td>
+      </tr>
+      <tr>
+        <td>Rotation (0 - 0°, 1 - 90°, 2 - 180°, 3 - 270°) </td>
+        <td>2024</td>
+      </tr>
+      <tr class="alt">
+        <td>Brightness White </td>
+        <td>2025</td>
+      </tr>
+      <tr>
+        <td>Brightness B </td>
+        <td>2026</td>
+      </tr>
+      <tr class="alt">
+        <td>Brightness G </td>
+        <td>2027</td>
+      </tr>
+      <tr>
+        <td>Brightness R </td>
+        <td>2028</td>
+      </tr>
+      <tr class="alt">
+        <td>Vertical scale (1) </td>
+        <td>2029</td>
+      </tr>
+      <tr>
+        <td>Horizontal scale (1) </td>
+        <td>2030</td>
+      </tr>
+      <tr class="alt">
+        <td>Low shift column </td>
+        <td>2031</td>
+      </tr>
+      <tr>
+        <td>High shift column </td>
+        <td>2032</td>
+      </tr>
+      <tr class="alt">
+        <td>Low shift row </td>
+        <td>2033</td>
+      </tr>
+      <tr>
+        <td>High shift row </td>
+        <td>2034</td>
+      </tr>
+      <tr class="alt">
+        <td>Charset, always 0 </td>
+        <td>2035</td>
+      </tr>
+      <tr>
+        <td>Brightness (additive) </td>
+        <td>2036</td>
+      </tr>
+      <tr class="alt">
+        <td>Shift cells (number of cells, &gt;0 right, &lt;0 left) </td>
+        <td>2037</td>
+      </tr>
+      <tr>
+        <td>Shift rows (number of rows, &gt;0 shift up, &lt;0 shift down) </td>
+        <td>2038</td>
+      </tr>
+      <tr class="alt">
+        <td>Hardware Clear Row (Writing clears row) </td>
+        <td>2039</td>
+      </tr>
+      <tr>
+        <td>Hardware Clear Column (Writing clears column) </td>
+        <td>2040</td>
+      </tr>
+      <tr class="alt">
+        <td>Hardware Clear Screen </td>
+        <td>2041</td>
+      </tr>
+      <tr>
+        <td>Hardware Background Color (000) </td>
+        <td>2042</td>
+      </tr>
+      <tr class="alt">
+        <td>Cursor Blink Rate (0.50) </td>
+        <td>2043</td>
+      </tr>
+      <tr>
+        <td>Cursor Size (0.25) </td>
+        <td>2044</td>
+      </tr>
+      <tr class="alt">
+        <td>Cursor Address </td>
+        <td>2045</td>
+      </tr>
+      <tr>
+        <td>Cursor Enabled </td>
+        <td>2046</td>
+      </tr>
+      <tr class="alt">
+        <td>Clk </td>
+        <td>2047</td>
+      </tr>
+    </tbody></table>
+  </div>
+  <div class="box">
+    <h2 style="background: #E3DA5C;">Digitalscreen</h2>
+    <table border="0" class="yellow">
+      <tbody><tr>
+        <td>RGB data </td>
+        <td>0 - 786431</td>
+      </tr>
+      <tr class="alt">
+        <td>Color mode 
+		<br>0: RGBXXX; 
+		<br>1: R G B; 
+		<br>2: R*65536 + G*256 + B; 
+		<br>3: RRRGGGBBB </td>
+        <td>1048569</td>
+      </tr>
+      <tr>
+        <td>Clear row </td>
+        <td>1048570</td>
+      </tr>
+      <tr class="alt">
+        <td>Clear column </td>
+        <td>1048571</td>
+      </tr>
+      <tr>
+        <td>Height </td>
+        <td>1048572</td>
+      </tr>
+      <tr class="alt">
+        <td>Width </td>
+        <td>1048573</td>
+      </tr>
+      <tr>
+        <td>Hardware Clear Screen </td>
+        <td>1048574</td>
+      </tr>
+      <tr class="alt">
+        <td>CLK </td>
+        <td>1048575</td>
+      </tr>
+    </tbody></table>
+  </div>
+  <div class="box">
+    <h2 style="background: #3671c6;">CD Ray</h2>
+    <table border="0" class="blue">
+      <tbody><tr>
+        <td> Infothread by Xandaros and Fox </td>
+        <td><a href="http://www.wiremod.com/forum/wiremod-tutorials/9305-support-cds-cd-rays.html">http://www.wiremod.com/forum/wiremod-tutorials/9305-support-cds-cd-rays.html</a></td>
+      </tr>
+      <tr class="alt">
+        <td>[W] Write ray on </td>
+        <td>0</td>
+      </tr>
+      <tr>
+        <td>[W] Read ray on </td>
+        <td>1</td>
+      </tr>
+      <tr class="alt">
+        <td>[R] Current sector (global) </td>
+        <td>2</td>
+      </tr>
+      <tr>
+        <td>[R] Current sector (on track) </td>
+        <td>3</td>
+      </tr>
+      <tr class="alt">
+        <td>[R] Current track </td>
+        <td>4</td>
+      </tr>
+      <tr>
+        <td>[R] Current stack </td>
+        <td>5</td>
+      </tr>
+      <tr class="alt">
+        <td>[R] Current address (global) </td>
+        <td>6</td>
+      </tr>
+      <tr>
+        <td>[R] Current address (in current stack) </td>
+        <td>7</td>
+      </tr>
+      <tr class="alt">
+        <td>[W] Buffer ready (read or write - pick the ray) </td>
+        <td>8</td>
+      </tr>
+      <tr>
+        <td>[W] Continious mode </td>
+        <td>9</td>
+      </tr>
+      <tr class="alt">
+        <td>[W] Wait for address mode </td>
+        <td>10</td>
+      </tr>
+      <tr>
+        <td>[W] Target address (in current stack) </td>
+        <td>11</td>
+      </tr>
+      <tr class="alt">
+        <td>[W] Wait for track&amp;sector mode </td>
+        <td>12</td>
+      </tr>
+      <tr>
+        <td>[W] Target sector </td>
+        <td>13</td>
+      </tr>
+      <tr class="alt">
+        <td>[W] Target track </td>
+        <td>14</td>
+      </tr>
+      <tr>
+        <td>[R] Raw disk spin velocity </td>
+        <td>21</td>
+      </tr>
+      <tr class="alt">
+        <td>[R] Raw disk spin angle </td>
+        <td>22</td>
+      </tr>
+      <tr>
+        <td>[R] Raw distance from disk center </td>
+        <td>23</td>
+      </tr>
+      <tr class="alt">
+        <td>[R] Raw stack index </td>
+        <td>24</td>
+      </tr>
+      <tr>
+        <td>[R] Disk precision (Inches Per Block) </td>
+        <td>25</td>
+      </tr>
+      <tr class="alt">
+        <td>[R] Disk sectors (total) </td>
+        <td>26</td>
+      </tr>
+      <tr>
+        <td>[R] Disk tracks (total) </td>
+        <td>27</td>
+      </tr>
+      <tr class="alt">
+        <td>[R] First track number </td>
+        <td>28</td>
+      </tr>
+      <tr>
+        <td>[R] Bytes per block </td>
+        <td>29</td>
+      </tr>
+      <tr class="alt">
+        <td>[R] Disk size (per stack) </td>
+        <td>30</td>
+      </tr>
+      <tr>
+        <td>[R] Disk volume (bytes total)</td>
+        <td>31</td>
+      </tr>
+      <tr class="alt">
+        <td> Buffer </td>
+        <td> 512 - 1023 </td>
+      </tr>
+    </tbody></table>
+  </div>
+</div>
+<div id="right">
+  <div class="box">
+    <h2 style="background: #B22430">GPU</h2>
+    <table border="0" class="red">
+      <tbody><tr>
+        <td>GPU Documentation</td>
+        <td><a href="http://www.wiremod.com/forum/cpu-tutorials-programs/7645-zgpu-documentation.html">http://www.wiremod.com/forum/cpu-tutorials-programs/7645-zgpu-documentation.html</a></td>
+      </tr>
+      <tr class="alt">
+        <td>CLK</td>
+        <td>65535</td>
+      </tr>
+      <tr>
+        <td>RESET </td>
+        <td>65534</td>
+      </tr>
+      <tr class="alt">
+        <td>HARDWARE CLEAR </td>
+        <td>65533</td>
+      </tr>
+      <tr>
+        <td>Vertex mode (render vertex instead of RT) </td>
+        <td>65532</td>
+      </tr>
+      <tr class="alt">
+        <td>HALT </td>
+        <td>65531</td>
+      </tr>
+      <tr>
+        <td>RAM_RESET </td>
+        <td>65530</td>
+      </tr>
+      <tr class="alt">
+        <td>Horizontal image scale </td>
+        <td>65525</td>
+      </tr>
+      <tr>
+        <td>Vertical image scale </td>
+        <td>65524</td>
+      </tr>
+      <tr class="alt">
+        <td>Hardware scale </td>
+        <td>65523</td>
+      </tr>
+      <tr>
+        <td>Rotation (0 - 0°, 1 - 90°, 2 - 180°, 3 - 270°) </td>
+        <td>65522</td>
+      </tr>
+      <tr class="alt">
+        <td>Sprite size 32 </td>
+        <td>65521</td>
+      </tr>
+      <tr>
+        <td>Image width (800) </td>
+        <td>65515</td>
+      </tr>
+      <tr class="alt">
+        <td>Image height (600) </td>
+        <td>65514</td>
+      </tr>
+      <tr>
+        <td>Real screen ratio </td>
+        <td>65513</td>
+      </tr>
+      <tr class="alt">
+        <td>Parameter list address (for dwritefmt) </td>
+        <td>65512</td>
+      </tr>
+      <tr>
+        <td>Cursor X (0..1) </td>
+        <td>65505</td>
+      </tr>
+      <tr class="alt">
+        <td>Cursor Y (0 - 1) </td>
+        <td>65504</td>
+      </tr>
+      <tr>
+        <td>Cursor visible </td>
+        <td>65503</td>
+      </tr>
+      <tr class="alt">
+        <td>Brightness W </td>
+        <td>65495</td>
+      </tr>
+      <tr>
+        <td>Brightness R </td>
+        <td>65494</td>
+      </tr>
+      <tr class="alt">
+        <td>Brightness G </td>
+        <td>65493</td>
+      </tr>
+      <tr>
+        <td>Brightness B </td>
+        <td>65492</td>
+      </tr>
+      <tr class="alt">
+        <td>Contrast W </td>
+        <td>65491</td>
+      </tr>
+      <tr>
+        <td>Contrast R </td>
+        <td>65490</td>
+      </tr>
+      <tr class="alt">
+        <td>Contrast G </td>
+        <td>65489</td>
+      </tr>
+      <tr>
+        <td>Contrast B </td>
+        <td>65488</td>
+      </tr>
+      <tr class="alt">
+        <td>Circle quality (3 - 128) </td>
+        <td>65485</td>
+      </tr>
+      <tr>
+        <td>Offset Point X </td>
+        <td>65484</td>
+      </tr>
+      <tr class="alt">
+        <td>Offset Point Y </td>
+        <td>65483</td>
+      </tr>
+      <tr>
+        <td>Rotation (rad) </td>
+        <td>65482</td>
+      </tr>
+      <tr class="alt">
+        <td>Scale </td>
+        <td>65481</td>
+      </tr>
+      <tr>
+        <td>Center point X </td>
+        <td>65480</td>
+      </tr>
+      <tr class="alt">
+        <td>Center point Y </td>
+        <td>65479</td>
+      </tr>
+      <tr>
+        <td>Circle start (rad) </td>
+        <td>65478</td>
+      </tr>
+      <tr class="alt">
+        <td>Circle end (rad) </td>
+        <td>65477</td>
+      </tr>
+      <tr>
+        <td>Line width (1) </td>
+        <td>65476</td>
+      </tr>
+      <tr class="alt">
+        <td>Scale X </td>
+        <td>65475</td>
+      </tr>
+      <tr>
+        <td>Scale Y </td>
+        <td>65474</td>
+      </tr>
+      <tr class="alt">
+        <td>Font align </td>
+        <td>65473</td>
+      </tr>
+      <tr>
+        <td>ZOffset </td>
+        <td>65472</td>
+      </tr>
+    </tbody></table>
+  </div>
+  <div class="box">
+    <h2 style="background: #23A553;">Keyboard</h2>
+    <table border="0" class="green">
+      <tbody><tr>
+        <td>Key Numbering</td>
+        <td>0</td>
+      </tr>
+      <tr class="alt">
+        <td>Keyboard Buffer</td>
+        <td>1 - 31</td>
+      </tr>
+      <tr>
+        <td>ASCII Mapped Array</td>
+        <td>32 - 255</td>
+      </tr>
+    </tbody></table>
+  </div>
+  <div class="box">
+    <h2 style="background: #E3DA5C;">Ranger</h2>
+    <table border="0" class="yellow">
+      <tbody><tr>
+        <td>Trace</td>
+        <td>0</td>
+      </tr>
+      <tr class="alt">
+        <td>Result</td>
+        <td>1</td>
+      </tr>
+      <tr>
+        <td>Range</td>
+        <td>2</td>
+      </tr>
+      <tr class="alt">
+        <td>Default to Zero</td>
+        <td>3</td>
+      </tr>
+      <tr>
+        <td>Skew X (-1 ... 1)</td>
+        <td>4</td>
+      </tr>
+      <tr class="alt">
+        <td>Skey Y (-1 ... 1)</td>
+        <td>5</td>
+      </tr>
+      <tr>
+        <td>Trace Water</td>
+        <td>6</td>
+      </tr>
+    </tbody></table>
+  </div>
+  <div class="box">
+    <h2 style="background: #B22430">HS Holoemitter</h2>
+    <table border="0" class="red">
+      <tbody><tr>
+        <td>Clk</td>
+        <td>0</td>
+      </tr>
+      <tr class="alt">
+        <td>If you press 'use' on a point, its number will be put here</td>
+        <td>1</td>
+      </tr>
+      <tr>
+        <td>Pointsize</td>
+        <td>2</td>
+      </tr>
+      <tr class="alt">
+        <td>Flags (bit 0 = show beam, bit 1 = use GPS coords, bit 2 = individual color for each point)</td>
+        <td>3</td>
+      </tr>
+	  <tr>
+        <td>Number of points</td>
+        <td>4</td>
+      </tr>
+      <tr class="alt">
+        <td>All Points in one color</td>
+        <td>5 = point 1 X;
+          6 = point 1 Y;
+          7 = point 1 Z;
+          8 = point 2 X;
+          ... etc </td>
+      </tr>
+      <tr>
+        <td>Individual colors mode</td>
+        <td>5 = point 1 X;
+          6 = point 1 Y;
+          7 = point 1 Z;
+          8 = point 1 Red;
+          9 = point 1 Green;
+          10 = point 1 Blue;
+          11 = point 1 Alpha;
+          12 = point 2 X; </td>
+      </tr>
+    </tbody></table>
+  </div>
+</div>
+<div id="footer"> <a rel="license" href="http://creativecommons.org/licenses/by/3.0/"> <img alt="Creative Commons License" style="border-width:0" src="./HiSpeed Devices Cheat Sheet_files/88x31.png"> </a> </div>
+
+
+</body></html>
