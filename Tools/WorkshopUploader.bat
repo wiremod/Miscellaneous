@@ -23,7 +23,7 @@ cls
 REM We're going to check and see if gmodpath is set, and either confirm with the user, or have them change it.
 IF DEFINED gmodpath (
   :GMODPATHQ
-  set /p confirmgmodpath="Is %gmodpath% the correct path to the mad and gmpublish? (Y)es / (N)o
+  set /p confirmgmodpath="Is %gmodpath% the correct path to gmad and gmpublish? (Y)es / (N)o
   IF /I %confirmgmodpath%==Y GOTO GMODPATHTESTS
   IF /I %confirmgmodpath%==N (
     REM clear the gmodpath variable and restart this block so that the check fails and prompts to be set.
