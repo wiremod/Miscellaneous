@@ -1,10 +1,13 @@
 @ECHO OFF
-ECHO Please log steam into the wireteam account before continuing, and that the git folder is set to the correct branch, revision, and appropriate changes are included if needed.
+ECHO Welcome to the workshop UPDATER tool.
+ECHO Please log steam into the appropriate account before continuing,
+ECHO and that the git folder is set to the correct branch, revision,
+ECHO and that appropriate changes included if needed.
 PAUSE
 set sourcepath=%~dp0
 :CONFIRMSOURCEPATH
 cls
-set /p confirmsourcepath="Is %sourcepath% the correct path to the source code folders for wire, adv dupe, and/or adv dupe 2?
+set /p confirmsourcepath="Is %sourcepath% the correct path to the source code folders that you intend to update on the workshop?
 IF /I %confirmsourcepath%==Y GOTO GMODPATH
 IF /I %confirmsourcepath%==N SETSOURCEPATH
 ECHO.
@@ -18,8 +21,16 @@ GOTO :CONFIRMSOURCEPATH
 :GMODPATH
 cls
 set /p gmodpath="Please provide the full folder path to gmad and gmpublish, including a trailing slash"
-IF NOT EXIST %gmodpath%gmad.exe ECHO "gmad.exe doesn't exist at this path!" && PAUSE && GOTO CONFIRMSOURCEPATH
-IF NOT EXIST %gmodpath%gmpublish.exe ECHO "gmpublish.exe doesn't exist at this path!" && PAUSE && GOTO CONFIRMSOURCEPATH
+IF NOT EXIST %gmodpath%gmad.exe (
+ECHO "gmad.exe doesn't exist at this path!"
+PAUSE
+GOTO CONFIRMSOURCEPATH
+)
+IF NOT EXIST %gmodpath%gmpublish.exe (
+ECHO "gmpublish.exe doesn't exist at this path!"
+PAUSE
+GOTO CONFIRMSOURCEPATH
+)
 :MENU
 cls
 ECHO.
@@ -59,13 +70,22 @@ PAUSE
 GOTO MENU
 :EXECUTE
 cls
-IF NOT EXIST %sourcefolder% ECHO "%sourcefolder% folder doesn't exist here. Check your path!" && GOTO MENU
+IF NOT EXIST %sourcefolder% (
+ECHO "%sourcefolder% folder doesn't exist here. Check your path!"
+pause
+GOTO MENU
+)
 ECHO Building %sourcefolder%.gma file...
 %gmodpath%gmad.exe create -folder %sourcepath%\%sourcefolder%
 :SETCHANGES
 set changes=
 set /p changes="Please provide the changelog for %sourcefolder% changes."
-IF NOT DEFINED changes ECHO. && ECHO "You must enter changes" && PAUSE && GOTO SETCHANGES
+IF NOT DEFINED changes (
+ECHO.
+ECHO "You must enter changes"
+PAUSE
+GOTO SETCHANGES
+)
 :CHECKCHANGES
 cls
 ECHO %changes%
