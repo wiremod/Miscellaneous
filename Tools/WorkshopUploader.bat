@@ -89,10 +89,14 @@ ECHO That is not a valid option!
 PAUSE
 GOTO MENU
 :MANUALFOLDER
+REM Let's clear these variables, just in case, so there's no accidents.
+set sourcefolder=
+set workshopid=
 cls
 set /p sourcefolder="What is the name of the addon folder, without any paths, that you wish to package and update?
 cls
-set /p confirmsourcefolder="To confirm, %sourcefolder% is what you wanted to package and update? (Y)es / (N)o / (C)ancel
+set /p workshopid="What is the workshop ID of the addon that you wish to package and update?
+set /p confirmsourcefolder="To confirm, %sourcefolder% is the addon, and %workshopid% is the workshop ID that you want to package and update? (Y)es / (N)o / (C)ancel
 IF /I %confirmsourcefolder%==Y GOTO EXECUTE
 IF /I %confirmsourcefolder%==N GOTO MANUALFOLDER
 IF /I %confirmsourcefolder%==C GOTO MENU
