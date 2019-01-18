@@ -4,7 +4,8 @@ ECHO Please log steam into the appropriate account before continuing,
 ECHO and that the git folder is set to the correct branch, revision,
 ECHO and that appropriate changes included if needed.
 PAUSE
-set sourcepath="%~dp0"
+REM %~dp0 grabs the current full path that the script resides in
+set sourcepath=%~dp0
 :CONFIRMSOURCEPATH
 cls
 set /p confirmsourcepath="Is %sourcepath% the correct path to the source code folders that you intend to update on the workshop? (Y)es / (N)o - "
@@ -67,17 +68,17 @@ ECHO 6 - EXIT
 ECHO.
 SET /P M="Type the option, then press ENTER:"
 IF %M%==1 (
-  set sourcefolder="wire"
+  set sourcefolder=wire
   set workshopid="160250458"
   GOTO EXECUTE
 )
 IF %M%==2 (
-  set sourcefolder="advduplicator"
+  set sourcefolder=advduplicator
   set workshopid="163806212"
   GOTO EXECUTE
 )
 IF %M%==3 (
-  set sourcefolder="advdupe2"
+  set sourcefolder=advdupe2
   set workshopid="773402917"
   GOTO EXECUTE
 )
@@ -112,7 +113,7 @@ IF NOT EXIST %sourcefolder% (
   GOTO MENU
 )
 ECHO Building %sourcefolder%.gma file...
-%gmodpath%gmad.exe create -folder "%sourcepath%\%sourcefolder%"
+%gmodpath%gmad.exe create -folder "%sourcepath%%sourcefolder%"
 :SETCHANGES
 set changes=
 set /p changes="Please provide the changelog for %sourcefolder% changes. - "
@@ -134,7 +135,7 @@ ECHO That wasn't a valid option!
 PAUSE
 GOTO CHECKCHANGES
 :PUBLISH
-%gmodpath%gmpublish.exe update -addon "%sourcepath%\%sourcefolder%.gma" -id %workshopid% -changes "%changes%"
+%gmodpath%gmpublish.exe update -addon "%sourcepath%%sourcefolder%.gma" -id %workshopid% -changes "%changes%"
 PAUSE
 set sourcefolder=
 set workshopid=
