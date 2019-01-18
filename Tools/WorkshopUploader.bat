@@ -4,10 +4,10 @@ ECHO Please log steam into the appropriate account before continuing,
 ECHO and that the git folder is set to the correct branch, revision,
 ECHO and that appropriate changes included if needed.
 PAUSE
-set sourcepath=%~dp0
+set sourcepath="%~dp0"
 :CONFIRMSOURCEPATH
 cls
-set /p confirmsourcepath="Is %sourcepath% the correct path to the source code folders that you intend to update on the workshop? (Y)es / (N)o
+set /p confirmsourcepath="Is %sourcepath% the correct path to the source code folders that you intend to update on the workshop? (Y)es / (N)o - "
 IF /I %confirmsourcepath%==Y GOTO GMODPATH
 IF /I %confirmsourcepath%==N MANUALSETSOURCEPATH
 ECHO.
@@ -16,12 +16,12 @@ PAUSE
 GOTO :CONFIRMSOURCEPATH
 :MANUALSETSOURCEPATH
 cls
-set /p sourcepath="Please provide the full path, including trailing slash, to source code folders for compiling.
+set /p sourcepath="Please provide the full path, including trailing slash, to source code folders for compiling. - "
 GOTO :CONFIRMSOURCEPATH
 :GMODPATH
 cls
 IF NOT DEFINED gmodpath GOTO DEFINEGMODPATH
-set /p confirmgmodpath="Is %gmodpath% the correct path to gmad and gmpublish? (Y)es / (N)o
+set /p confirmgmodpath="Is %gmodpath% the correct path to gmad and gmpublish? (Y)es / (N)o - "
 IF /I %confirmgmodpath%==Y GOTO GMODPATHTESTS
 IF /I %confirmgmodpath%==N (
   REM clear the gmodpath variable and restart this block so that the check fails and prompts to be set.
@@ -34,7 +34,7 @@ IF /I %confirmgmodpath%==N (
   GOTO GMODPATH
 :DEFINEGMODPATH
 cls
-set /p gmodpath="Please provide the full folder path to gmad and gmpublish, including a trailing slash"
+set /p gmodpath="Please provide the full folder path to gmad and gmpublish, including a trailing slash - "
 GOTO GMODPATH
 :GMODPATHTESTS
 IF NOT EXIST %gmodpath%gmad.exe (
@@ -93,10 +93,10 @@ REM Let's clear these variables, just in case, so there's no accidents.
 set sourcefolder=
 set workshopid=
 cls
-set /p sourcefolder="What is the name of the addon folder, without any paths, that you wish to package and update?
+set /p sourcefolder="What is the name of the addon folder, without any paths, that you wish to package and update? - "
 cls
-set /p workshopid="What is the workshop ID of the addon that you wish to package and update?
-set /p confirmsourcefolder="To confirm, %sourcefolder% is the addon, and %workshopid% is the workshop ID that you want to package and update? (Y)es / (N)o / (C)ancel
+set /p workshopid="What is the workshop ID of the addon that you wish to package and update? - "
+set /p confirmsourcefolder="To confirm, %sourcefolder% is the addon, and %workshopid% is the workshop ID that you want to package and update? (Y)es / (N)o / (C)ancel - "
 IF /I %confirmsourcefolder%==Y GOTO EXECUTE
 IF /I %confirmsourcefolder%==N GOTO MANUALFOLDER
 IF /I %confirmsourcefolder%==C GOTO MENU
@@ -115,7 +115,7 @@ ECHO Building %sourcefolder%.gma file...
 %gmodpath%gmad.exe create -folder %sourcepath%\%sourcefolder%
 :SETCHANGES
 set changes=
-set /p changes="Please provide the changelog for %sourcefolder% changes."
+set /p changes="Please provide the changelog for %sourcefolder% changes. - "
 IF NOT DEFINED changes (
   ECHO.
   ECHO "You must enter changes"
@@ -125,7 +125,7 @@ IF NOT DEFINED changes (
 :CHECKCHANGES
 cls
 ECHO %changes%
-set /p confirmchanges="Is the above what you wanted for the changelog? (Y)es / (N)o / (C)ancel"
+set /p confirmchanges="Is the above what you wanted for the changelog? (Y)es / (N)o / (C)ancel - "
 IF /I %confirmchanges%==Y GOTO PUBLISH
 IF /I %confirmchanges%==N GOTO SETCHANGES
 IF /I %confirmchanges%==C GOTO MENU
