@@ -112,7 +112,7 @@ IF NOT EXIST %sourcefolder% (
   GOTO MENU
 )
 ECHO Building %sourcefolder%.gma file...
-%gmodpath%gmad.exe create -folder %sourcepath%\%sourcefolder%
+%gmodpath%gmad.exe create -folder "%sourcepath%\%sourcefolder%"
 :SETCHANGES
 set changes=
 set /p changes="Please provide the changelog for %sourcefolder% changes. - "
