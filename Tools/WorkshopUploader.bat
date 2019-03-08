@@ -70,17 +70,17 @@ SET /P M="Type the option, then press ENTER:"
 IF %M%==1 (
   set sourcefolder=wire
   set workshopid="160250458"
-  GOTO EXECUTE
+  GOTO :PACKQUESTION
 )
 IF %M%==2 (
   set sourcefolder=advduplicator
   set workshopid="163806212"
-  GOTO EXECUTE
+  GOTO :PACKQUESTION
 )
 IF %M%==3 (
   set sourcefolder=advdupe2
   set workshopid="773402917"
-  GOTO EXECUTE
+  GOTO :PACKQUESTION
 )
 IF %M%==4 GOTO MANUALFOLDER
 IF %M%==5 GOTO CONFIRMSOURCEPATH
@@ -94,24 +94,31 @@ REM Let's clear these variables, just in case, so there's no accidents.
 set sourcefolder=
 set workshopid=
 cls
-set /p sourcefolder="What is the name of the addon folder, without any paths, that you wish to package and update? - "
+set /p sourcefolder="Please provide the name of the addon folder without paths, or the name of the gma file without the extension, that you wish to update - "
+:CONFIRMPARAMETERS
 cls
 set /p workshopid="What is the workshop ID of the addon that you wish to package and update? - "
 set /p confirmsourcefolder="To confirm, %sourcefolder% is the addon, and %workshopid% is the workshop ID that you want to package and update? (Y)es / (N)o / (C)ancel - "
-IF /I %confirmsourcefolder%==Y GOTO EXECUTE
+IF /I %confirmsourcefolder%==Y GOTO PACKQUESTION
 IF /I %confirmsourcefolder%==N GOTO MANUALFOLDER
 IF /I %confirmsourcefolder%==C GOTO MENU
 ECHO.
 ECHO That wasn't a valid option!
 PAUSE
-GOTO MANUALFOLDER
-:EXECUTE
+GOTO CONFIRMPARAMETERS
+:PACKQUESTION
+set packgma=
 cls
+set /p packgma="Do you need to pack the gma from source? - "
+IF /I %packgma%==Y GOTO EXECUTEPACK
+IF /I %packgma%==N GOTO SETCHANGES
+IF /I %packgma%==C GOTO MENU
 IF NOT EXIST %sourcefolder% (
   ECHO "%sourcefolder% folder doesn't exist here. Check your path or the addon name!"
   pause
-  GOTO MENU
+  GOTO PACKQUESTION
 )
+:EXECUTEPACK
 ECHO Building %sourcefolder%.gma file...
 %gmodpath%gmad.exe create -folder "%sourcepath%%sourcefolder%"
 :SETCHANGES
