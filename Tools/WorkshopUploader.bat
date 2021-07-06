@@ -38,13 +38,13 @@ cls
 set /p gmodpath="Please provide the full folder path to gmad and gmpublish, including a trailing slash - "
 GOTO GMODPATH
 :GMODPATHTESTS
-IF NOT EXIST %gmodpath%gmad.exe (
+IF NOT EXIST "%gmodpath%gmad.exe" (
   ECHO "gmad.exe doesn't exist at %gmodpath%!"
   PAUSE
   set gmodpath=
   GOTO GMODPATH
 )
-IF NOT EXIST %gmodpath%gmpublish.exe (
+IF NOT EXIST "%gmodpath%gmpublish.exe" (
   ECHO "gmpublish.exe doesn't exist at %gmodpath%!"
   PAUSE
   set gmodpath=
@@ -120,7 +120,7 @@ IF NOT EXIST %sourcefolder% (
 )
 :EXECUTEPACK
 ECHO Building %sourcefolder%.gma file...
-%gmodpath%gmad.exe create -folder "%sourcepath%%sourcefolder%"
+"%gmodpath%gmad.exe" create -folder "%sourcepath%%sourcefolder%"
 :SETCHANGES
 set changes=
 set /p changes="Please provide the changelog for %sourcefolder% changes. - "
@@ -142,7 +142,7 @@ ECHO That wasn't a valid option!
 PAUSE
 GOTO CHECKCHANGES
 :PUBLISH
-%gmodpath%gmpublish.exe update -addon "%sourcepath%%sourcefolder%.gma" -id %workshopid% -changes "%changes%"
+"%gmodpath%gmpublish.exe" update -addon "%sourcepath%%sourcefolder%.gma" -id "%workshopid%" -changes "%changes%"
 PAUSE
 set sourcefolder=
 set workshopid=
