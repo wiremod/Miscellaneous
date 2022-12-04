@@ -83,20 +83,20 @@ After the interrupt handler has finished running, it can restore the ZCPU state 
 For example, if this was the stack state before an interrupt call, and current value of \reg{IP} is 157:
 \begin{verbatim}
 ..........
-65304: ...
 65306: 181
 65305: -94
+65304: ...
 
 ESP = 65304
 \end{verbatim}
 then the stack state will be altered to this after an interrupt call (and \reg{IP} will be set to interrupt handler entrypoint):
 \begin{verbatim}
 ..........
-65304: ...
 65306: 181
 65305: -94
 65304: 0   CS
 65303: 157 IP
+65302: ...
 
 ESP = 65302
 \end{verbatim}
@@ -223,8 +223,8 @@ Some of the segment registers are used by the processor for specific tasks, as p
 \begin{longtable}{|c|c|p{3.0in}|} \hline
 Register & Name & Description \\ \hline
 \texttt{CS} & Code segment    & Processor fetches code from this segment \\ \hline
-\texttt{SS} & Data segment    & Default segment for data \\ \hline
-\texttt{DS} & Stack segment   & Processor stack is located in this segment \\ \hline
+\texttt{DS} & Data segment    & Default segment for data \\ \hline
+\texttt{SS} & Stack segment   & Processor stack is located in this segment \\ \hline
 \texttt{ES} & Extra segment   & User segment \\ \hline
 \texttt{GS} & G segment       & User segment \\ \hline
 \texttt{FS} & F segment       & User segment \\ \hline
