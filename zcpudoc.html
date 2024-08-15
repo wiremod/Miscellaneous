@@ -105,18 +105,18 @@ enabled, any interrupts called will stop the processor execution.</p><p>After
 state and the previously executed code will continue executing from 
 where it was interrupted.</p><p>For example, if this was the stack state before an interrupt call, and current value of <tt>IP</tt> is 157:
 </p><pre class="verbatim">..........
-65304: ...
 65306: 181
 65305: -94
+65304: ...
 
 ESP = 65304
 </pre><p>then the stack state will be altered to this after an interrupt call (and <tt>IP</tt> will be set to interrupt handler entrypoint):
 </p><pre class="verbatim">..........
-65304: ...
 65306: 181
 65305: -94
 65304: 0   CS
 65303: 157 IP
+65302: ...
 
 ESP = 65302
 </pre><p>Interrupts are very similar to normal calls (see: <a href="#branching">??</a>),
@@ -237,8 +237,8 @@ ArrayStart: db 10,50,30
 
 </p><blockquote class="table"><div class="center"><hr size="2" width="80%"></div><div class="center"><table border="1" cellpadding="1" cellspacing="0"><tbody><tr><td align="center" nowrap="nowrap" valign="top">Register</td><td align="center" nowrap="nowrap" valign="top">Name</td><td align="left" valign="top">Description</td></tr>
 <tr><td align="center" nowrap="nowrap" valign="top"><tt>CS</tt></td><td align="center" nowrap="nowrap" valign="top">Code segment</td><td align="left" valign="top">Processor fetches code from this segment</td></tr>
-<tr><td align="center" nowrap="nowrap" valign="top"><tt>SS</tt></td><td align="center" nowrap="nowrap" valign="top">Data segment</td><td align="left" valign="top">Default segment for data</td></tr>
-<tr><td align="center" nowrap="nowrap" valign="top"><tt>DS</tt></td><td align="center" nowrap="nowrap" valign="top">Stack segment</td><td align="left" valign="top">Processor stack is located in this segment</td></tr>
+<tr><td align="center" nowrap="nowrap" valign="top"><tt>DS</tt></td><td align="center" nowrap="nowrap" valign="top">Data segment</td><td align="left" valign="top">Default segment for data</td></tr>
+<tr><td align="center" nowrap="nowrap" valign="top"><tt>SS</tt></td><td align="center" nowrap="nowrap" valign="top">Stack segment</td><td align="left" valign="top">Processor stack is located in this segment</td></tr>
 <tr><td align="center" nowrap="nowrap" valign="top"><tt>ES</tt></td><td align="center" nowrap="nowrap" valign="top">Extra segment</td><td align="left" valign="top">User segment</td></tr>
 <tr><td align="center" nowrap="nowrap" valign="top"><tt>GS</tt></td><td align="center" nowrap="nowrap" valign="top">G segment</td><td align="left" valign="top">User segment</td></tr>
 <tr><td align="center" nowrap="nowrap" valign="top"><tt>FS</tt></td><td align="center" nowrap="nowrap" valign="top">F segment</td><td align="left" valign="top">User segment</td></tr>
@@ -3960,7 +3960,7 @@ File was not found in the specified folder, and it was not found on one of the s
 Internal compiler error (is not an error that can be worked around).</p>
 <h1 class="chapter">
 <h2 class="section">
-<h3 class="subsection"><p>
+<h3 class="subsection"><p> <a name="zgpu"></a>
 ZGPU is a vector graphics processor, which runs a certain set of 
 instructions to display an image on screen. It has two basic modes of 
 operation - frame-based mode, in which the processor core will execute a
@@ -5455,7 +5455,7 @@ else
   SetTexture(0)
 end
 </pre>
-<h1 class="chapter">
+<h1 class="chapter"> <a name="zspu"> </a>
 <h2 class="section"><p>
 ZSPU is a programmable sequencer and sound synthesizer. It works with 
 waveforms and channels. Each waveform is an unique sound, there can be 
